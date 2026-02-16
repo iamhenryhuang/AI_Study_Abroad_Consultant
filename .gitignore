@@ -1,0 +1,52 @@
+# 環境與密鑰
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虛擬環境
+.venv/
+venv/
+ENV/
+env/
+
+# IDE / 編輯器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 作業系統
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日誌與暫存
+*.log
+*.tmp
+.cache/
+
+# 專案：匯出檔可選
+db/exported_data.sql

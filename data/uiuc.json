@@ -1,0 +1,29 @@
+{
+    "school_id": "UIUC-GRAINGER-MSCS",
+    "university": "University of Illinois Urbana-Champaign",
+    "program": "Master of Science in Computer Science",
+    "requirements": {
+      "toefl": {
+        "min_total": 103,
+        "is_required": true,
+        "notes": "Full admission requires 103 or higher. Scores 79-102 require limited status admission."
+      },
+      "ielts": {
+        "min_total": 7.5,
+        "is_required": true
+      },
+      "gre": {
+        "status": "Not Required",
+        "notes": "GRE is not required for the MS CS program."
+      },
+      "minimum_gpa": 3.0,
+      "recommendation_letters": 3,
+      "interview_required": false
+    },
+    "deadlines": {
+      "fall_intake": "2025-12-15",
+      "spring_intake": "Not Available"
+    },
+    "official_link": "https://cs.illinois.edu/admissions/graduate/applications-process-requirements",
+    "description_for_vector_db": "The UIUC MS CS is a research-oriented degree that requires 28 credit hours of coursework and 4 credit hours of thesis. It is highly competitive and provides full financial support through assistantships (RA/TA) for most students."
+}

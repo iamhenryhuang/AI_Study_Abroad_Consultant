@@ -1,0 +1,29 @@
+{
+    "school_id": "Stanford-CS-MS",
+    "university": "Stanford University",
+    "program": "Master of Science in Computer Science",
+    "requirements": {
+      "toefl": {
+        "min_total": 89,
+        "is_required": true,
+        "notes": "Stanford MS requires a minimum of 89 for MS, but 100+ is highly recommended for competitiveness."
+      },
+      "ielts": {
+        "min_total": 7.0,
+        "is_required": true
+      },
+      "gre": {
+        "status": "Not Considered",
+        "notes": "GRE scores are not required and not considered for MS applicants."
+      },
+      "minimum_gpa": 3.5,
+      "recommendation_letters": 3,
+      "interview_required": "Optional/Program Dependent"
+    },
+    "deadlines": {
+      "fall_intake": "2025-12-02",
+      "spring_intake": "Not Available"
+    },
+    "official_link": "https://www.cs.stanford.edu/admissions/masters-admissions",
+    "description_for_vector_db": "Stanford's MS in CS program offers several specializations including AI, Systems, and Theory. It is one of the most prestigious terminal master's programs in the world, closely integrated with Silicon Valley's tech ecosystem."
+}

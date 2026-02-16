@@ -1,0 +1,29 @@
+{
+    "school_id": "MIT-EECS-MS",
+    "university": "Massachusetts Institute of Technology",
+    "program": "Master of Science in Electrical Engineering and Computer Science (Direct to PhD path)",
+    "requirements": {
+      "toefl": {
+        "min_total": 100,
+        "is_required": true,
+        "notes": "EECS requires a minimum of 100 on the iBT. IELTS is preferred over TOEFL."
+      },
+      "ielts": {
+        "min_total": 7.0,
+        "is_required": true
+      },
+      "gre": {
+        "status": "Not Required",
+        "notes": "GRE scores are not used during the admission process for EECS."
+      },
+      "minimum_gpa": 3.5,
+      "recommendation_letters": 3,
+      "interview_required": false
+    },
+    "deadlines": {
+      "fall_intake": "2025-12-01",
+      "spring_intake": "Not Available"
+    },
+    "official_link": "https://www.eecs.mit.edu/academics/graduate-programs/admission-process/",
+    "description_for_vector_db": "MIT's EECS graduate program is research-centric. There is no terminal master's degree; the MS is earned en route to the PhD. Successful applicants usually have extensive research experience and strong mathematical backgrounds."
+}

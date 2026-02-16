@@ -1,0 +1,29 @@
+{
+    "school_id": "CMU-SCS-MSCS",
+    "university": "Carnegie Mellon University",
+    "program": "Master of Science in Computer Science",
+    "requirements": {
+      "toefl": {
+        "min_total": 100,
+        "is_required": true,
+        "notes": "Requires a minimum score of 25 in each section (Reading, Listening, Speaking, Writing)."
+      },
+      "ielts": {
+        "min_total": 7.0,
+        "is_required": true
+      },
+      "gre": {
+        "status": "Optional",
+        "notes": "GRE is optional but recommended. Strong quantitative scores are expected."
+      },
+      "minimum_gpa": 3.0,
+      "recommendation_letters": 3,
+      "interview_required": false
+    },
+    "deadlines": {
+      "fall_intake": "2025-12-10",
+      "spring_intake": "Not Available"
+    },
+    "official_link": "https://www.csd.cmu.edu/academics/master-science-computer-science/admissions",
+    "description_for_vector_db": "CMU's MSCS is a world-class program focusing on broad computer science research. It is a three-semester program designed for students with a strong undergraduate background in CS. The curriculum is flexible, allowing students to specialize in AI, Systems, or Theory."
+}
