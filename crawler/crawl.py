@@ -11,7 +11,6 @@ import os
 import sys
 
 os.environ["LITELLM_LOG"] = "DEBUG"
-#os.environ["GOOGLE_API_KEY"] = "AIzaSyB-fMfa_NYoJ_locZZIoz6YJexxEAEvXBw"
 
 class BasicAdmissionSchema(BaseModel):
     school_name: str = Field(..., description="學校的全名，例如：University of Southern California")
