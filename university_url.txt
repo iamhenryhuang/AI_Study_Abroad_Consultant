@@ -1,0 +1,8 @@
+1.stanford
+stanford graduate admission : https://gradadmissions.stanford.edu
+stanford cs : https://www.cs.stanford.edu/admissions
+
+2.MIT
+3.CMU
+4.Harvard
+5.UCB
