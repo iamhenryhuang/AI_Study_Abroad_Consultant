@@ -2,10 +2,11 @@
 """
 資料庫腳本統一入口。請在專案根目錄執行：
 
-  python scripts/run.py setup   # 檢查連線，必要時建立 study_abroad 資料庫
-  python scripts/run.py import  # 建表並匯入 web_crawler/*.json
-  python scripts/run.py verify  # 檢查資料是否已寫入
-  python scripts/run.py export  # 匯出至 db/exported_data.sql
+  python scripts/run.py setup    # 檢查連線，必要時建立 study_abroad 資料庫
+  python scripts/run.py import   # 建表並匯入 data/*.json
+  python scripts/run.py verify   # 檢查資料是否已寫入
+  python scripts/run.py export   # 匯出至 db/exported_data.sql
+  python scripts/run.py init-all # 一次完成 setup + import
 """
 import sys
 from pathlib import Path
@@ -15,16 +16,16 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from db.setup import run as run_setup
-from db.import_data import run as run_import
-from db.verify import run as run_verify
-from db.export_data import run as run_export
+from db.ops import export_sql, import_json, setup_db, verify
+from embed import run_embed
 
 COMMANDS = {
-    "setup": ("檢查連線並建立資料庫", run_setup),
-    "import": ("建表並匯入 web_crawler JSON", run_import),
-    "verify": ("檢查資料是否已寫入", run_verify),
-    "export": ("匯出至 db/exported_data.sql", run_export),
+    "setup": ("檢查連線並建立資料庫", setup_db),
+    "import": ("建表並匯入 data/*.json", import_json),
+    "verify": ("檢查資料是否已寫入", verify),
+    "export": ("匯出至 db/exported_data.sql", export_sql),
+    "embed": ("切片 + 向量化並寫入 document_chunks", run_embed),
+    "init-all": ("建立資料庫並匯入 JSON（setup + import）", lambda: (setup_db() and import_json())),
 }
 
 

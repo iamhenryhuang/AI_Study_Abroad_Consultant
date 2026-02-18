@@ -1,29 +1,29 @@
 {
-    "school_id": "MIT-EECS-MS",
-    "university": "Massachusetts Institute of Technology",
-    "program": "Master of Science in Electrical Engineering and Computer Science (Direct to PhD path)",
-    "requirements": {
-      "toefl": {
-        "min_total": 100,
-        "is_required": true,
-        "notes": "EECS requires a minimum of 100 on the iBT. IELTS is preferred over TOEFL."
-      },
-      "ielts": {
-        "min_total": 7.0,
-        "is_required": true
-      },
-      "gre": {
-        "status": "Not Required",
-        "notes": "GRE scores are not used during the admission process for EECS."
-      },
-      "minimum_gpa": 3.5,
-      "recommendation_letters": 3,
-      "interview_required": false
+  "school_id": "MIT-EECS-MS",
+  "university": "Massachusetts Institute of Technology",
+  "program": "Master of Science in Electrical Engineering and Computer Science (Direct to PhD path)",
+  "requirements": {
+    "toefl": {
+      "min_total": 100,
+      "is_required": true,
+      "notes": "EECS requires a minimum of 100 on the iBT. IELTS is preferred over TOEFL."
     },
-    "deadlines": {
-      "fall_intake": "2025-12-01",
-      "spring_intake": "Not Available"
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
     },
-    "official_link": "https://www.eecs.mit.edu/academics/graduate-programs/admission-process/",
-    "description_for_vector_db": "MIT's EECS graduate program is research-centric. There is no terminal master's degree; the MS is earned en route to the PhD. Successful applicants usually have extensive research experience and strong mathematical backgrounds."
+    "gre": {
+      "status": "Not Required",
+      "notes": "GRE scores are not used during the admission process for EECS."
+    },
+    "minimum_gpa": 3.5,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-01",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://www.eecs.mit.edu/academics/graduate-programs/admission-process/",
+  "description_for_vector_db": "[Program Nature] MIT's EECS graduate program is strictly research-centric and does not offer a terminal master's degree. All applicants must apply for the SM+PhD track, where the Master of Science (SM) is earned en route to the Doctorate. [Research Environment] As the largest academic department at MIT, EECS offers an interdisciplinary environment spanning across Computer Science (CS), Artificial Intelligence and Decision-making (AI+D), and Electrical Engineering (EE). Students often collaborate with world-class labs such as CSAIL (Computer Science and Artificial Intelligence Laboratory) and the Media Lab. [Admission Preference] Success in admission is heavily predicated on an applicant's research pedigree. The committee looks for students with significant contributions to peer-reviewed publications or high-impact technical projects. A very strong foundation in mathematics and theoretical computer science is expected. [Application Strategy] Since the program is mentor-based, the Statement of Purpose (SOP) should explicitly mention specific faculty members whose research aligns with the applicant's goals. Unlike many other schools, MIT EECS explicitly ignores GRE scores, placing holistic emphasis on the research portfolio and Recommendation Letters from known experts in the field. [Career Path] Graduates from this program are primary candidates for leading faculty positions in academia or top-level research scientist roles at organizations like DeepMind, OpenAI, and NVIDIA Research."
 }

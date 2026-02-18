@@ -50,5 +50,5 @@
 
 ## 資料來源與匯出
 
-- **寫入資料的來源**：`web_crawler/*.json`，由 `python scripts/run.py import` 匯入。
+- **寫入資料的來源**：`data/*.json`，由 `python scripts/run.py import`（或 `python scripts/run.py init-all`）匯入。
 - **檢視已寫入的資料**：執行 `python scripts/run.py export` 會產生 `db/exported_data.sql`，可直接開啟該檔查看目前資料庫中的內容（INSERT 語句格式）。
