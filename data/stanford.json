@@ -1,29 +1,29 @@
 {
-    "school_id": "Stanford-CS-MS",
-    "university": "Stanford University",
-    "program": "Master of Science in Computer Science",
-    "requirements": {
-      "toefl": {
-        "min_total": 89,
-        "is_required": true,
-        "notes": "Stanford MS requires a minimum of 89 for MS, but 100+ is highly recommended for competitiveness."
-      },
-      "ielts": {
-        "min_total": 7.0,
-        "is_required": true
-      },
-      "gre": {
-        "status": "Not Considered",
-        "notes": "GRE scores are not required and not considered for MS applicants."
-      },
-      "minimum_gpa": 3.5,
-      "recommendation_letters": 3,
-      "interview_required": "Optional/Program Dependent"
+  "school_id": "Stanford-CS-MS",
+  "university": "Stanford University",
+  "program": "Master of Science in Computer Science",
+  "requirements": {
+    "toefl": {
+      "min_total": 89,
+      "is_required": true,
+      "notes": "Stanford MS requires a minimum of 89 for MS, but 100+ is highly recommended for competitiveness."
     },
-    "deadlines": {
-      "fall_intake": "2025-12-02",
-      "spring_intake": "Not Available"
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
     },
-    "official_link": "https://www.cs.stanford.edu/admissions/masters-admissions",
-    "description_for_vector_db": "Stanford's MS in CS program offers several specializations including AI, Systems, and Theory. It is one of the most prestigious terminal master's programs in the world, closely integrated with Silicon Valley's tech ecosystem."
+    "gre": {
+      "status": "Not Considered",
+      "notes": "GRE scores are not required and not considered for MS applicants."
+    },
+    "minimum_gpa": 3.5,
+    "recommendation_letters": 3,
+    "interview_required": "Optional/Program Dependent"
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-02",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://www.cs.stanford.edu/admissions/masters-admissions",
+  "description_for_vector_db": "[Program Prestige] Stanford's MS in Computer Science is a terminal professional degree and widely considered the premier program of its kind. Its location in the heart of Silicon Valley offers students unparalleled proximity to major tech giants and venture capital. [Specialization Areas] The program provides nine distinct specializations: Artificial Intelligence, Biocomputation, Computer and Network Security, Human-Computer Interaction, Information Management and Analytics, Real-World Computing, Software Theory, Systems, and Theoretical Computer Science. This depth allows students to become deep subject matter experts. [Industry & Entrepreneurship] Stanford CS is famous for its 'entrepreneurial spirit.' Many students engage in internships with companies like Apple, Google, and Meta, or even launch their own startups during their studies. The program holds massive 'Career Fairs' specifically for CS students, with attendance from almost every significant tech employer in the world. [Admission Insight] Admission is holistic and extremely competitive. Beyond a stellar GPA, the committee seeks individuals who demonstrate 'leadership' and 'impact.' Whether it's through research, high-level internships, or community contributions, the applicant must show they can thrive in a high-pressure, innovative environment. [Holistic Review] While the official TOEFL minimum is 89, successful applicants typically present much higher scores (100+). The Statement of Purpose should reflect a clear vision of how Stanford's specific resources and Silicon Valley location will facilitate the applicant's unique career or research trajectory."
 }

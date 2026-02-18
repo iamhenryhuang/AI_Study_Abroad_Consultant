@@ -1,4 +1,6 @@
 -- Create tables for Study Abroad Consultant
+CREATE EXTENSION IF NOT EXISTS vector;
+DROP TABLE IF EXISTS document_chunks;
 DROP TABLE IF EXISTS deadlines;
 DROP TABLE IF EXISTS requirements;
 DROP TABLE IF EXISTS universities;
@@ -37,4 +39,15 @@ CREATE TABLE IF NOT EXISTS deadlines (
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
     fall_intake DATE,
     spring_intake VARCHAR(100) -- Using VARCHAR as it might be "Not Available"
+);
+
+-- 4. Document Chunks Table (for RAG / vector search)
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id          SERIAL PRIMARY KEY,
+    school_id   VARCHAR(100) NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    chunk_text  TEXT NOT NULL,
+    embedding   vector(1024),
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (school_id, chunk_index)
 );
