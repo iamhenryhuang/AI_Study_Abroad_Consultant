@@ -43,11 +43,18 @@ CREATE TABLE IF NOT EXISTS deadlines (
 
 -- 4. Document Chunks Table (for RAG / vector search)
 CREATE TABLE IF NOT EXISTS document_chunks (
-    id          SERIAL PRIMARY KEY,
-    school_id   VARCHAR(100) NOT NULL,
-    chunk_index INTEGER NOT NULL,
-    chunk_text  TEXT NOT NULL,
-    embedding   vector(1024),
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id            SERIAL PRIMARY KEY,
+    school_id     VARCHAR(100) NOT NULL,
+    university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+    chunk_index   INTEGER NOT NULL,
+    chunk_text    TEXT NOT NULL,
+    embedding     vector(1024),
+    -- 結構化 metadata：存入數字/日期欄位，供 hybrid query WHERE 過濾
+    metadata      JSONB,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (school_id, chunk_index)
 );
+
+-- GIN index：加速 metadata JSONB 欄位的條件查詢
+CREATE INDEX IF NOT EXISTS idx_chunks_metadata
+    ON document_chunks USING GIN (metadata);
