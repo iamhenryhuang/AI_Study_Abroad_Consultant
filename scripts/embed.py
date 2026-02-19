@@ -51,6 +51,24 @@ def run_embed(data_dirname: str = "data") -> bool:
                 print(f"  [{school_id}] 無 description_for_vector_db，跳過。")
                 continue
 
+            # 組裝結構化 metadata（數字/日期欄位），供 hybrid RAG query WHERE 過濾
+            req = data.get("requirements", {})
+            deadlines = data.get("deadlines", {})
+            meta = {
+                "university":             data.get("university"),
+                "school_id":              school_id,
+                "toefl_min":              req.get("toefl", {}).get("min_total"),
+                "toefl_required":         req.get("toefl", {}).get("is_required"),
+                "ielts_min":              req.get("ielts", {}).get("min_total"),
+                "ielts_required":         req.get("ielts", {}).get("is_required"),
+                "minimum_gpa":            req.get("minimum_gpa"),
+                "recommendation_letters": req.get("recommendation_letters"),
+                "gre_status":             req.get("gre", {}).get("status"),
+                "fall_deadline":          deadlines.get("fall_intake"),
+                "spring_deadline":        deadlines.get("spring_intake"),
+                "interview_required":     req.get("interview_required"),
+            }
+
             # 1. Chunking
             chunks = chunk_text(description)
             print(f"  [{school_id}] 切成 {len(chunks)} 個 chunk")
@@ -59,10 +77,10 @@ def run_embed(data_dirname: str = "data") -> bool:
             print(f"  [{school_id}] 向量化中...")
             embeddings = embed_texts(chunks)
 
-            # 3. 寫入 DB
-            n = upsert_chunks(conn, school_id, chunks, embeddings)
+            # 3. 寫入 DB（含 metadata）
+            n = upsert_chunks(conn, school_id, chunks, embeddings, meta)
             total_chunks += n
-            print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk")
+            print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk（含 metadata）")
 
         print(f"\n✓ 完成！共寫入 {total_chunks} 筆 chunk 至 document_chunks。")
         return True
