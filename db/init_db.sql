@@ -58,3 +58,9 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 -- GIN index：加速 metadata JSONB 欄位的條件查詢
 CREATE INDEX IF NOT EXISTS idx_chunks_metadata
     ON document_chunks USING GIN (metadata);
+
+-- HNSW index：加速向量相似度搜尋 (ANN)
+-- m: 每個節點的最大連接數 (預設 16), ef_construction: 建立索引時的搜尋範圍 (預設 64)
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+    ON document_chunks USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);

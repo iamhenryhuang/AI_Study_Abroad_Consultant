@@ -9,8 +9,10 @@ from typing import Optional, List
 import litellm
 import os
 import sys
+from get_website import get_website
+from dotenv import load_dotenv
 
-os.environ["LITELLM_LOG"] = "DEBUG"
+
 
 class BasicAdmissionSchema(BaseModel):
     school_name: str = Field(..., description="學校的全名，例如：University of Southern California")
@@ -23,13 +25,15 @@ class BasicAdmissionSchema(BaseModel):
     recommendation_letters: Optional[str] = Field(None, description="推薦信的要求描述")
     tuition: Optional[str] = Field(None, description="學費資訊描述")
 
-litellm._turn_on_debug()
+#litellm._turn_on_debug()
 
 async def main():
-    os.environ["GROQ_API_KEY"] = "api_key放這裡"
+    load_dotenv()
+    os.environ["GROQ_API_KEY"] = os.environ.get("GROQ_API_KEY")
     #print(litellm.model_list)
+
     my_llm_config = LLMConfig(
-        provider="groq/llama-3.3-70b-versatile",
+        provider="groq/llama-3.1-8b-instant",
         #api_token="AIzaSyB-fMfa_NYoJ_locZZIoz6YJexxEAEvXBw"
     )
     # 2. 建立策略：關鍵在於傳入 .model_json_schema()
@@ -50,7 +54,9 @@ async def main():
     browser_config = BrowserConfig(headless=True)
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
-        extraction_strategy=strategy
+        extraction_strategy=strategy,
+        #word_count_threshold=200, # 只處理超過 200 字的區塊
+        excluded_tags=['nav', 'footer', 'header'] # 排除導航欄和頁尾
     )
 
     base = {"school_name",
@@ -66,32 +72,38 @@ async def main():
     }
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(
-            url="https://www.cs.ucla.edu/graduate-requirements/", 
-            config=crawler_config
-        )
-        #print(result.extracted_content)
         
-        if result.success:
-            data = json.loads(result.extracted_content)
+        target_list = get_website()
 
-            final_summary = {} 
-            for item in data:
-                for key, value in item.items():
-                    
-                    if final_summary.get(key) is None and value is not None:
-                        final_summary[key] = value
-        
-                    elif key == 'deadline' and isinstance(value, list):
-                        existing = final_summary.get(key, [])
-                        final_summary[key] = list(set(existing + value))
-
-            unique_output = [final_summary] 
+        for item in target_list:
+            result = await crawler.arun(
+                url=item["official_website"], 
+                config=crawler_config
+            )
+            #print(result.extracted_content)
             
-            print("\n--- 最終合併總結 ---")
-            print(json.dumps(final_summary, indent=2, ensure_ascii=False))
-        else:
-            print(f"Error: {result.error_message}")
+            if result.success:
+                data = json.loads(result.extracted_content)
+
+                final_summary = {} 
+                for item in data:
+                    for key, value in item.items():
+                        
+                        if final_summary.get(key) is None and value is not None:
+                            final_summary[key] = value
+            
+                        elif key == 'deadline' and isinstance(value, list):
+                            existing = final_summary.get(key, [])
+                            final_summary[key] = list(set(existing + value))
+
+                unique_output = [final_summary] 
+                
+                print("\n--- 最終合併總結 ---")
+                print(json.dumps(final_summary, indent=2, ensure_ascii=False))
+            else:
+                print(f"Error: {result.error_message}")
+
+            await asyncio.sleep(25)
 
 if __name__ == "__main__":
     if sys.platform == 'win32':

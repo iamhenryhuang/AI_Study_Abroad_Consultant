@@ -2,9 +2,9 @@
 
 RAG-based tool for applying to North America CS master’s programs. Pulls in official requirements (GPA, TOEFL, deadlines) and Reddit-style experience; surfaces both and helps resolve conflicts.
 
-**Stack:** Gemini 2.5 Flash, `BAAI/bge-m3` embeddings, PostgreSQL + pgvector, LangChain, FastAPI. Scraping via Firecrawl / LLM extraction.
+**Stack:** Gemini 2.5 Flash, `BAAI/bge-m3` embeddings, PostgreSQL + **pgvector (HNSW Index)**, LangChain, FastAPI. Scraping via Firecrawl / LLM extraction.
 
-**Flow:** Scrape → structure into Postgres (hard facts) + chunk & embed into pgvector (text). Query = SQL filter + vector search; results + user profile go to LLM for advice.
+**Flow:** Scrape → structure into Postgres (hard facts) + **chunk & embed** into pgvector (text). Query = SQL filter + **vector search**; results + user profile go to LLM for advice.
 
 ---
 
@@ -15,15 +15,18 @@ RAG-based tool for applying to North America CS master’s programs. Pulls in of
 
 ## scripts/
 
-- **`run.py`** — main entry: DB setup, import, verify, export
-- `db/` — modules: connection, setup, import_data, verify, export_data
+- **`run.py`** — main entry: DB operations, embedding pipeline, and RAG search
+- `db/` — modules: connection, setup, data import/export
+- `embedder/` — modules: text chunking, BGE-M3 embedding, and vector storage
+- `retriever/` — modules: vector similarity search logic
 
 **Quick start:**
 
-1. Copy `.env.example` → `.env`, set `DATABASE_URL`
+1. Copy `.env.example` → `.env`, set `DATABASE_URL` and `GOOGLE_API_KEY`
 2. `pip install -r requirements.txt`
 3. From project root:
-   - `python scripts/run.py setup` — init DB
-   - `python scripts/run.py import` — create tables, import `web_crawler/*.json`
-   - `python scripts/run.py verify` — check data
+   - `python scripts/run.py init-all` — init DB & import JSON
+   - `python scripts/run.py embed` — run chunking & embedding pipeline
+   - `python scripts/run.py search "your query"` — test RAG retrieval
+   - `python scripts/run.py verify-vdb` — check Vector DB status
    - `python scripts/run.py export` — write `db/exported_data.sql`
