@@ -12,6 +12,8 @@ import sys
 from get_website import get_website
 from dotenv import load_dotenv
 
+
+
 class BasicAdmissionSchema(BaseModel):
     school_name: str = Field(..., description="學校的全名，例如：University of Southern California")
     program_name: str = Field(..., description="系所或學位名稱，例如：MS in Computer Science")
@@ -102,7 +104,7 @@ async def main():
                 print(f"Error: {result.error_message}")
 
             await asyncio.sleep(25)
-            
+
 if __name__ == "__main__":
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
