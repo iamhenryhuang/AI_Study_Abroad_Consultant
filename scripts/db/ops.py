@@ -181,7 +181,7 @@ def verify():
             cur.execute("SELECT COUNT(*) FROM deadlines")
             print(f"deadlines 筆數: {cur.fetchone()[0]}")
         conn.close()
-        print("\n✓ 驗證通過：資料已存在於資料庫。")
+        print("\n驗證通過：資料已存在於資料庫。")
         return True
     except psycopg2.ProgrammingError as e:
         print(f"資料表不存在或結構錯誤: {e}")

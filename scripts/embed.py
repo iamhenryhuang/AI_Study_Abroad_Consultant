@@ -82,7 +82,7 @@ def run_embed(data_dirname: str = "data") -> bool:
             total_chunks += n
             print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk（含 metadata）")
 
-        print(f"\n✓ 完成！共寫入 {total_chunks} 筆 chunk 至 document_chunks。")
+        print(f"\n完成！共寫入 {total_chunks} 筆 chunk 至 document_chunks。")
         return True
 
     except Exception as e:
