@@ -15,6 +15,9 @@ This directory contains scripts for database management, text vectorization (emb
   - `verifier.py`: Tool to verify the status of the Vector DB.
 - `retriever/`: Logic for RAG search.
   - `search.py`: Implementation of vector similarity search using pgvector.
+  - `rag_pipeline.py`: Orchestration of the full RAG flow (Search + Rerank + LLM).
+- `generator/`: Logic for LLM answer generation.
+  - `gemini.py`: Integration with **Gemini 2.5 Flash** for final answer synthesis.
 
 ---
 
@@ -42,12 +45,16 @@ Run these commands from the **project root directory**:
   python scripts/run.py verify-vdb
   ```
 
-### 3. RAG Retrieval
-- **Execute Search**:
+### 3. RAG Search & Generation
+- **Execute Search Only (Retrieval + Rerank)**:
   ```bash
   python scripts/run.py search "your query"
   ```
-  *Example: `python scripts/run.py search "CMU MSCS research opportunities"`*
+- **Execute Full RAG (Search + LLM Answer)**:
+  ```bash
+  python scripts/run.py rag "your query"
+  ```
+  *Example: `python scripts/run.py rag "CMU MSCS research opportunities"`*
 
 ---
 
