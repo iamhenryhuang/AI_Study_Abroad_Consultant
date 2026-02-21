@@ -2,3 +2,5 @@
 *.json
 __pycache__/
 .venv/
+universities_data.json
+temp_json_data/
