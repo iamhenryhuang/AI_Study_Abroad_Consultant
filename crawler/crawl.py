@@ -15,6 +15,7 @@ from get_website import get_website
 from dotenv import load_dotenv
 from pathlib import Path
 
+CACHE_FILE = "universities_data.json"
 load_dotenv()
 
 if sys.platform == 'win32':
@@ -51,7 +52,7 @@ async def main():
         llm_config=my_llm_config,
         schema=BasicAdmissionSchema.model_json_schema(), 
         extraction_type="scheme",
-        chunking_strategy=RegexChunking(chunk_size=4000, chunk_overlap=200),
+        chunking_strategy=RegexChunking(chunk_size=2000, chunk_overlap=200),
         instruction="""
         請從網頁中提取入學門檻資訊。
         1. 學校名稱與系所名稱請使用英文 program_name 只能用 MS in Computer Science。
@@ -85,6 +86,15 @@ async def main():
         "error"
     }
 
+    cache_data = []
+    cache_path = Path(CACHE_FILE)
+    if cache_path.exists():
+        try:
+            cache_data = json.loads(cache_path.read_text(encoding="utf-8"))
+            print(f"✅ 已載入快取，目前共有 {len(cache_data)} 筆資料。")
+        except json.JSONDecodeError:
+            print("⚠️ 快取檔案格式錯誤，將重新開始。")
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         
         target_list = get_website()
@@ -93,68 +103,87 @@ async def main():
         os.makedirs("temp_json_data", exist_ok=True) 
 
         for item in target_list:
-            result = await crawler.arun(
-                url=item["official_website"], 
-                config=crawler_config
-            )
-            #print(result.extracted_content)
-            
-            if result.success:
-                data = json.loads(result.extracted_content)
+            school_name = item.get("school_name", "")
+            program_name = item.get("program_name", "")
+            degree_level = item.get("degree_level", "")
+            deadline = item.get("deadline", [])
 
-                final_summary = {} 
-                for item in data:
-                    for key, value in item.items():
-                        
-                        if final_summary.get(key) is None and value is not None:
-                            final_summary[key] = value
-            
-                        elif key == 'deadline' and isinstance(value, list):
-                            existing = final_summary.get(key, [])
-                            final_summary[key] = list(set(existing + value))
+            hit = False
+            for school in cache_data:
+                if school.get("school_name") == school_name and school.get("program_name") == program_name and school.get("degree_level") == degree_level and school.get("deadline") == deadline:
+                    print(f"學校資料已存在")
+                    hit = True
+                    break
 
-                #unique_output = [final_summary] 
+            if hit == False:
+                result = await crawler.arun(
+                    url=item["official_website"], 
+                    config=crawler_config
+                )
+                #print(result.extracted_content)
                 
-                standard_data = {
-                    "school_id": final_summary.get("school_name", "unknown").lower().replace(" ", "_"),
-                    "university": final_summary.get("school_name"),
-                    "program": final_summary.get("program_name"),
-                    "official_link": item.get("official_website"), # 從你的 target_list 拿
-                    "description_for_vector_db": f"Degree: {final_summary.get('degree_level')}. Tuition: {final_summary.get('tuition')}",
-                    "requirements": {
-                        "toefl": {
-                            "min_total": final_summary.get("toefl_min"),
-                            "is_required": True if final_summary.get("toefl_min") else False,
-                            "notes": ""
-                        },
-                        "ielts": {
-                            "min_total": final_summary.get("ielts_min"),
-                            "is_required": True if final_summary.get("ielts_min") else False
-                        },
-                        "minimum_gpa": final_summary.get("gpa_min"),
-                        "recommendation_letters": final_summary.get("recommendation_letters"),
-                        "interview_required": False
-                    },
-                    "deadlines": {
-                        "fall_intake": None, # ops.py 預期 YYYY-MM-DD，若 AI 抓的是字串就先填 None 或處理它
-                        "spring_intake": " | ".join(final_summary.get("deadline", []))
-                    }
-                }
+                if result.success:
+                    data = json.loads(result.extracted_content)
 
-                if final_summary.get("school_name"):
-                    print("\n--- 最終合併總結 ---")
-                    print(json.dumps(final_summary, indent=2, ensure_ascii=False))
+                    final_summary = {} 
+                    for item in data:
+                        for key, value in item.items():
+                            
+                            if final_summary.get(key) is None and value is not None:
+                                final_summary[key] = value
+                
+                            elif key == 'deadline' and isinstance(value, list):
+                                existing = final_summary.get(key, [])
+                                final_summary[key] = list(set(existing + value))
 
-                    file_name = f"temp_json_data/{standard_data['school_id']}.json"
-                    with open(file_name, "w", encoding="utf-8") as f:
-                        json.dump(standard_data, f, indent=2, ensure_ascii=False)
+                    #unique_output = [final_summary] 
                     
-                    print(f"✓ 已產出 JSON 預備檔: {file_name}")
-                
-                await asyncio.sleep(10)
+                    standard_data = {
+                        "school_id": final_summary.get("school_name", "unknown").lower().replace(" ", "_"),
+                        "university": final_summary.get("school_name"),
+                        "program": final_summary.get("program_name"),
+                        "official_link": item.get("official_website"), # 從你的 target_list 拿
+                        "description_for_vector_db": f"Degree: {final_summary.get('degree_level')}. Tuition: {final_summary.get('tuition')}",
+                        "requirements": {
+                            "toefl": {
+                                "min_total": final_summary.get("toefl_min"),
+                                "is_required": True if final_summary.get("toefl_min") else False,
+                                "notes": ""
+                            },
+                            "ielts": {
+                                "min_total": final_summary.get("ielts_min"),
+                                "is_required": True if final_summary.get("ielts_min") else False
+                            },
+                            "minimum_gpa": final_summary.get("gpa_min"),
+                            "recommendation_letters": final_summary.get("recommendation_letters"),
+                            "interview_required": False
+                        },
+                        "deadlines": {
+                            "fall_intake": None, # ops.py 預期 YYYY-MM-DD，若 AI 抓的是字串就先填 None 或處理它
+                            "spring_intake": " | ".join(final_summary.get("deadline", []))
+                        }
+                    }
 
-            else:
-                print(f"Error: {result.error_message}")
+                    if final_summary.get("school_name"):
+                        print("\n--- 最終合併總結 ---")
+                        print(json.dumps(final_summary, indent=2, ensure_ascii=False))
+
+                        # 1. 更新快取檔案 (universities_data.json)
+                        cache_data.append(final_summary)
+                        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                            json.dump(cache_data, f, indent=2, ensure_ascii=False)
+                        
+                        # 2. 產出給資料庫用的 JSON 檔案 (temp_json_data/xxx.json)
+                        file_name = f"temp_json_data/{standard_data['school_id']}.json"
+                        with open(file_name, "w", encoding="utf-8") as f:
+                            json.dump(standard_data, f, indent=2, ensure_ascii=False)
+                        
+                        print(f"✅ {final_summary['school_name']} 處理完成：已更新快取並產出 JSON 預備檔。")
+                
+                    await asyncio.sleep(20)
+
+                else:
+                    print(f"Error: {result.error_message}")
 
         print("\n--- 所有爬取任務完成，開始匯入資料庫 ---")
         try:

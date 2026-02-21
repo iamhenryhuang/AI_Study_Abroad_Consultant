@@ -1,9 +1,4 @@
--- Create tables for Study Abroad Consultant
-CREATE EXTENSION IF NOT EXISTS vector;
-DROP TABLE IF EXISTS document_chunks;
-DROP TABLE IF EXISTS deadlines;
-DROP TABLE IF EXISTS requirements;
-DROP TABLE IF EXISTS universities;
+
 
 -- 1. Universities Table
 CREATE TABLE IF NOT EXISTS universities (

@@ -1,0 +1,25 @@
+{
+  "prompt_hash": "eae7033ef8e5732c829cfb4cf7d1cdde",
+  "data": [
+    {
+      "school_name": "Massachusetts Institute of Technology",
+      "official_website": "https://www.mit.edu"
+    },
+    {
+      "school_name": "Stanford University",
+      "official_website": "https://www.stanford.edu"
+    },
+    {
+      "school_name": "Harvard University",
+      "official_website": "https://www.harvard.edu"
+    },
+    {
+      "school_name": "California Institute of Technology",
+      "official_website": "https://www.caltech.edu"
+    },
+    {
+      "school_name": "University of Cambridge",
+      "official_website": "https://www.cam.ac.uk"
+    }
+  ]
+}

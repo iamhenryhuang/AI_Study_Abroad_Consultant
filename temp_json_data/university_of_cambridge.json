@@ -1,0 +1,25 @@
+{
+  "school_id": "university_of_cambridge",
+  "university": "University of Cambridge",
+  "program": "MS in Computer Science",
+  "official_link": null,
+  "description_for_vector_db": "Degree: Postgraduate. Tuition: None",
+  "requirements": {
+    "toefl": {
+      "min_total": null,
+      "is_required": false,
+      "notes": ""
+    },
+    "ielts": {
+      "min_total": null,
+      "is_required": false
+    },
+    "minimum_gpa": null,
+    "recommendation_letters": null,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": null,
+    "spring_intake": "2026-03-16 | 2026-04-02"
+  }
+}

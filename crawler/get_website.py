@@ -4,7 +4,7 @@ import hashlib
 from groq import Groq
 from dotenv import load_dotenv
 
-CACHE_FILE = "universities_list.json"
+CACHE_FILE = "universities_link.json"
 
 def get_website():
     load_dotenv()
@@ -13,7 +13,7 @@ def get_website():
     current_prompt = (
         "List the top 5 world universities with their official website URLs in JSON format. "
         "Use a root key 'universities' containing a list of objects with fields: "
-        "'name' and 'official_website'." 
+        "'school_name' and 'official_website'." 
     )
     
     # 1. 計算當前 Prompt 的Hash

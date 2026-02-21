@@ -1,0 +1,71 @@
+[
+  {
+    "school_name": "Massachusetts Institute of Technology",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2026-02-21 (Priority)"
+    ],
+    "error": false
+  },
+  {
+    "school_name": "Stanford University",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2026-01-15 (Final)"
+    ],
+    "error": false
+  },
+  {
+    "index": 0,
+    "error": true,
+    "tags": [
+      "error"
+    ],
+    "content": "litellm.RateLimitError: RateLimitError: GroqException - {\"error\":{\"message\":\"Request too large for model `llama-3.1-8b-instant` in organization `org_01khjrkbjcexgb0cxq2e27fz3p` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 12815, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing\",\"type\":\"tokens\",\"code\":\"rate_limit_exceeded\"}}\n",
+    "school_name": "California Institute of Technology",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2025-12-15 (Priority)",
+      "2026-01-15 (Final)"
+    ]
+  },
+  {
+    "school_name": "Massachusetts Institute of Technology",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2026-02-21 (Priority)"
+    ],
+    "error": false
+  },
+  {
+    "school_name": "Stanford University",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2026-01-15 (Final)"
+    ],
+    "error": false
+  },
+  {
+    "school_name": "Harvard University",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Master",
+    "deadline": [
+      "2026-02-19"
+    ]
+  },
+  {
+    "school_name": "University of Cambridge",
+    "program_name": "MS in Computer Science",
+    "degree_level": "Postgraduate",
+    "deadline": [
+      "2026-03-16",
+      "2026-04-02"
+    ],
+    "error": false
+  }
+]

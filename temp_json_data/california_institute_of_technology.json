@@ -1,0 +1,25 @@
+{
+  "school_id": "california_institute_of_technology",
+  "university": "California Institute of Technology",
+  "program": "MS in Computer Science",
+  "official_link": null,
+  "description_for_vector_db": "Degree: Master. Tuition: None",
+  "requirements": {
+    "toefl": {
+      "min_total": null,
+      "is_required": false,
+      "notes": ""
+    },
+    "ielts": {
+      "min_total": null,
+      "is_required": false
+    },
+    "minimum_gpa": null,
+    "recommendation_letters": null,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": null,
+    "spring_intake": "2025-12-15 (Priority) | 2026-01-15 (Final)"
+  }
+}
