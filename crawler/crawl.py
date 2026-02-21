@@ -1,9 +1,11 @@
 import asyncio
 import json
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from crawl4ai.extraction_strategy import LLMExtractionStrategy 
 from crawl4ai import LLMConfig
-#from crawl4ai.async_configs import LlmConfig
+from crawl4ai.chunking_strategy import RegexChunking
+from crawl4ai.content_filter_strategy import PruningContentFilter
+#from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerationStrategy
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import litellm
@@ -11,8 +13,16 @@ import os
 import sys
 from get_website import get_website
 from dotenv import load_dotenv
+from pathlib import Path
 
+load_dotenv()
 
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+root_dir = str(Path(__file__).resolve().parent.parent)
+sys.path.append(root_dir)
+from scripts.db.ops import import_json
 
 class BasicAdmissionSchema(BaseModel):
     school_name: str = Field(..., description="學校的全名，例如：University of Southern California")
@@ -28,7 +38,7 @@ class BasicAdmissionSchema(BaseModel):
 #litellm._turn_on_debug()
 
 async def main():
-    load_dotenv()
+    
     os.environ["GROQ_API_KEY"] = os.environ.get("GROQ_API_KEY")
     #print(litellm.model_list)
 
@@ -41,6 +51,7 @@ async def main():
         llm_config=my_llm_config,
         schema=BasicAdmissionSchema.model_json_schema(), 
         extraction_type="scheme",
+        chunking_strategy=RegexChunking(chunk_size=4000, chunk_overlap=200),
         instruction="""
         請從網頁中提取入學門檻資訊。
         1. 學校名稱與系所名稱請使用英文 program_name 只能用 MS in Computer Science。
@@ -48,15 +59,18 @@ async def main():
         3. 若分數或 GPA 沒提到，請填 null。
         4. 請確保輸出符合 JSON 格式，並且與提供的 schema 一致。
         5. 請列出所需推薦信格式以及學費
-        """,
+        """
     )
 
     browser_config = BrowserConfig(headless=True)
+    content_filter = PruningContentFilter(threshold=0.48)
+
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=strategy,
-        #word_count_threshold=200, # 只處理超過 200 字的區塊
-        excluded_tags=['nav', 'footer', 'header'] # 排除導航欄和頁尾
+        word_count_threshold=100,
+        only_text=True,
+        excluded_tags=['nav', 'footer', 'header'], # 排除導航欄和頁尾
     )
 
     base = {"school_name",
@@ -74,6 +88,9 @@ async def main():
     async with AsyncWebCrawler(config=browser_config) as crawler:
         
         target_list = get_website()
+
+        # 建立一個臨時資料夾來放產出的 JSON
+        os.makedirs("temp_json_data", exist_ok=True) 
 
         for item in target_list:
             result = await crawler.arun(
@@ -96,14 +113,60 @@ async def main():
                             existing = final_summary.get(key, [])
                             final_summary[key] = list(set(existing + value))
 
-                unique_output = [final_summary] 
+                #unique_output = [final_summary] 
                 
-                print("\n--- 最終合併總結 ---")
-                print(json.dumps(final_summary, indent=2, ensure_ascii=False))
+                standard_data = {
+                    "school_id": final_summary.get("school_name", "unknown").lower().replace(" ", "_"),
+                    "university": final_summary.get("school_name"),
+                    "program": final_summary.get("program_name"),
+                    "official_link": item.get("official_website"), # 從你的 target_list 拿
+                    "description_for_vector_db": f"Degree: {final_summary.get('degree_level')}. Tuition: {final_summary.get('tuition')}",
+                    "requirements": {
+                        "toefl": {
+                            "min_total": final_summary.get("toefl_min"),
+                            "is_required": True if final_summary.get("toefl_min") else False,
+                            "notes": ""
+                        },
+                        "ielts": {
+                            "min_total": final_summary.get("ielts_min"),
+                            "is_required": True if final_summary.get("ielts_min") else False
+                        },
+                        "minimum_gpa": final_summary.get("gpa_min"),
+                        "recommendation_letters": final_summary.get("recommendation_letters"),
+                        "interview_required": False
+                    },
+                    "deadlines": {
+                        "fall_intake": None, # ops.py 預期 YYYY-MM-DD，若 AI 抓的是字串就先填 None 或處理它
+                        "spring_intake": " | ".join(final_summary.get("deadline", []))
+                    }
+                }
+
+                if final_summary.get("school_name"):
+                    print("\n--- 最終合併總結 ---")
+                    print(json.dumps(final_summary, indent=2, ensure_ascii=False))
+
+                    file_name = f"temp_json_data/{standard_data['school_id']}.json"
+                    with open(file_name, "w", encoding="utf-8") as f:
+                        json.dump(standard_data, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"✓ 已產出 JSON 預備檔: {file_name}")
+                
+                await asyncio.sleep(10)
+
             else:
                 print(f"Error: {result.error_message}")
 
-            await asyncio.sleep(25)
+        print("\n--- 所有爬取任務完成，開始匯入資料庫 ---")
+        try:
+            #  import_json，指向你存檔的資料夾
+            success = import_json(data_dirname="temp_json_data")
+            if success:
+                print("🚀 資料已成功同步至 PostgreSQL 資料庫！")
+            else:
+                print("❌ 資料庫匯入失敗，請檢查 db/ops.py 的報錯訊息。")
+        except Exception as e:
+            print(f"匯入過程發生非預期錯誤: {e}")
+            
 
 if __name__ == "__main__":
     if sys.platform == 'win32':
