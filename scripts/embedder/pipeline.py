@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """
-Chunking + Embedding 主程式。
-從 data/*.json 讀取 description_for_vector_db，
-切片後用 BAAI/bge-m3 轉成向量，寫入 document_chunks 資料表。
-
-使用方式：
-  python scripts/run.py embed
+Chunking + Embedding 流水線。
 """
 import json
 import sys
 from pathlib import Path
 
 # 讓 scripts 目錄在 path 中
-SCRIPTS = Path(__file__).resolve().parent
-ROOT = SCRIPTS.parent
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+CURRENT_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = CURRENT_DIR.parent
+ROOT_DIR = SCRIPTS_DIR.parent
+
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 from db.connection import get_connection
 from embedder.chunker import chunk_text
@@ -23,9 +20,9 @@ from embedder.store import upsert_chunks
 from embedder.vectorize import embed_texts
 
 
-def run_embed(data_dirname: str = "data") -> bool:
+def run_pipeline(data_dirname: str = "data") -> bool:
     """讀取所有 JSON，切片 → 向量化 → 寫入 DB。"""
-    data_dir = ROOT / data_dirname
+    data_dir = ROOT_DIR / data_dirname
     if not data_dir.is_dir():
         print(f"找不到目錄 {data_dir}")
         return False
@@ -51,7 +48,7 @@ def run_embed(data_dirname: str = "data") -> bool:
                 print(f"  [{school_id}] 無 description_for_vector_db，跳過。")
                 continue
 
-            # 組裝結構化 metadata（數字/日期欄位），供 hybrid RAG query WHERE 過濾
+            # 組裝結構化 metadata
             req = data.get("requirements", {})
             deadlines = data.get("deadlines", {})
             meta = {
@@ -77,22 +74,21 @@ def run_embed(data_dirname: str = "data") -> bool:
             print(f"  [{school_id}] 向量化中...")
             embeddings = embed_texts(chunks)
 
-            # 3. 寫入 DB（含 metadata）
+            # 3. 寫入 DB
             n = upsert_chunks(conn, school_id, chunks, embeddings, meta)
             total_chunks += n
-            print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk（含 metadata）")
+            print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk")
 
-        print(f"\n✓ 完成！共寫入 {total_chunks} 筆 chunk 至 document_chunks。")
+        print(f"\n完成！共處理 {total_chunks} 筆 chunk。")
         return True
 
     except Exception as e:
         conn.rollback()
-        print(f"embed 失敗: {e}")
+        print(f"Pipeline 失敗: {e}")
         return False
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
-    ok = run_embed()
-    sys.exit(0 if ok else 1)
+    run_pipeline()
