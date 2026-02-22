@@ -18,6 +18,8 @@ This directory contains scripts for database management, text vectorization (emb
   - `rag_pipeline.py`: Orchestration of the full RAG flow (Search + Rerank + LLM).
 - `generator/`: Logic for LLM answer generation.
   - `gemini.py`: Integration with **Gemini 2.5 Flash** for final answer synthesis.
+- `evaluator/`: RAG quality evaluation (RAG Triad).
+  - `rag_evaluation.py`: Uses Gemini as a judge to score Context Relevance, Faithfulness, and Answer Relevance.
 
 ---
 
@@ -45,16 +47,20 @@ Run these commands from the **project root directory**:
   python scripts/run.py verify-vdb
   ```
 
-### 3. RAG Search & Generation
+### 3. RAG Search, Generation & Evaluation
 - **Execute Search Only (Retrieval + Rerank)**:
   ```bash
   python scripts/run.py search "your query"
   ```
-- **Execute Full RAG (Search + LLM Answer)**:
+- **Execute Full RAG (Search + Answer)**:
   ```bash
   python scripts/run.py rag "your query"
   ```
-  *Example: `python scripts/run.py rag "CMU MSCS research opportunities"`*
+- **Execute Full RAG with Quality Evaluation (RAG Triad)**:
+  ```bash
+  python scripts/run.py rag "your query" --eval
+  ```
+  *Example: `python scripts/run.py rag "UIUC MSCS GPA requirement" --eval`*
 
 ---
 

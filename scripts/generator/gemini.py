@@ -31,7 +31,8 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
     """
     client = get_gemini_client()
     
-    # 組合 context，同時包含 chunk_text 與 結構化 metadata
+def format_context_for_prompt(context_docs: list[dict]) -> str:
+    """將檢索到的原始文件列表格式化為 LLM 易讀的字串。"""
     formatted_docs = []
     for i, doc in enumerate(context_docs):
         univ = doc.get('university', '未知大學')
@@ -64,7 +65,21 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
         )
         formatted_docs.append(doc_block)
 
-    context_text = "\n\n".join(formatted_docs)
+    return "\n\n".join(formatted_docs)
+
+def generate_answer(query: str, context_docs: list[dict], model_name: str = "gemini-2.5-flash"):
+    """
+    根據檢索到的文件生成回答。
+    
+    Args:
+        query: 使用者問題
+        context_docs: 檢索並排序後的文件清單
+        model_name: 模型名稱
+    """
+    client = get_gemini_client()
+    
+    # 組合 context，同時包含 chunk_text 與 結構化 metadata
+    context_text = format_context_for_prompt(context_docs)
     
     prompt = f"""你是一位專業的北美 CS 留學顧問，擅長分析各校官網數據並提供量身定制的申請策略。
 請根據提供的【參考資料】（包含學校硬性指標與背景描述）來回答使用者問題。
