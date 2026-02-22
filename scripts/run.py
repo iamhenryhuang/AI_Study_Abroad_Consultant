@@ -36,6 +36,7 @@ from db.ops import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
+from retriever.rag_pipeline import run_rag_pipeline
 
 COMMANDS = {
     "setup": ("檢查連線並建立資料庫", setup_db),
@@ -45,6 +46,7 @@ COMMANDS = {
     "embed": ("切片 + 向量化並寫入 document_chunks", run_pipeline),
     "verify-vdb": ("檢查向量資料庫 (Vector DB) 狀態", verify_embeddings),
     "search": ("執行 RAG 檢索測試", lambda: run_search("UIUC MSCS requirements")),
+    "rag": ("執行完整 RAG 回答 (檢索+重排+LLM)", lambda: run_rag_pipeline("CMU MSCS requirement")),
     "init-all": ("建立資料庫並匯入 JSON（setup + import）", lambda: (setup_db() and import_json())),
 }
 
@@ -60,10 +62,25 @@ def main():
     cmd = sys.argv[1]
     _, runner = COMMANDS[cmd]
     
-    # 對於 search 指令，支援自定義 query
-    if cmd == "search" and len(sys.argv) > 2:
-        query = " ".join(sys.argv[2:])
-        ok = run_search(query)
+    # 對於 search 與 rag 指令，支援自定義 query
+    if cmd in ["search", "rag"]:
+        if len(sys.argv) > 2:
+            query = " ".join(sys.argv[2:])
+        else:
+            # 如果沒帶參數，則進入互動模式
+            query = input(f"請輸入要{cmd}的問題: ").strip()
+            if not query:
+                print("未輸入問題，停止執行。")
+                sys.exit(0)
+        
+        if cmd == "search":
+            ok = run_search(query)
+        else:
+            # 檢查是否有 --eval 參數
+            evaluate = "--eval" in sys.argv
+            # 如果 query 內容中包含了 --eval，將其移除
+            query = query.replace("--eval", "").strip()
+            ok = run_rag_pipeline(query, evaluate=evaluate)
     else:
         ok = runner()
     

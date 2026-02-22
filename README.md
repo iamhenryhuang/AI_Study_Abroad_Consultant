@@ -18,7 +18,8 @@ RAG-based tool for applying to North America CS master’s programs. Pulls in of
 - **`run.py`** — main entry: DB operations, embedding pipeline, and RAG search
 - `db/` — modules: connection, setup, data import/export
 - `embedder/` — modules: text chunking, BGE-M3 embedding, and vector storage
-- `retriever/` — modules: vector similarity search logic
+- `retriever/` — modules: vector similarity search and Rrag_pipeline logic
+- `evaluator/` — modules: RAG Triad (Context Relevance, Faithfulness, Answer Relevance) evaluation using Gemini as a judge
 
 **Quick start:**
 
@@ -27,6 +28,7 @@ RAG-based tool for applying to North America CS master’s programs. Pulls in of
 3. From project root:
    - `python scripts/run.py init-all` — init DB & import JSON
    - `python scripts/run.py embed` — run chunking & embedding pipeline
-   - `python scripts/run.py search "your query"` — test RAG retrieval
+   - `python scripts/run.py rag "your query" --eval` — execute RAG answer with Triad evaluation
+   - `python scripts/run.py search "your query"` — test RAG retrieval only
    - `python scripts/run.py verify-vdb` — check Vector DB status
    - `python scripts/run.py export` — write `db/exported_data.sql`
