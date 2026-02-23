@@ -29,6 +29,7 @@ RAG-based tool for applying to North America CS master’s programs. Pulls in of
    - `python scripts/run.py init-all` — init DB & import JSON
    - `python scripts/run.py embed` — run chunking & embedding pipeline
    - `python scripts/run.py rag "your query" --eval` — execute RAG answer with Triad evaluation
+   - `python scripts/run.py rag "your query" --mq` — execute RAG with Multi-Query expansion
    - `python scripts/run.py search "your query"` — test RAG retrieval only
    - `python scripts/run.py verify-vdb` — check Vector DB status
    - `python scripts/run.py export` — write `db/exported_data.sql`

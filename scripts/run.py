@@ -76,11 +76,14 @@ def main():
         if cmd == "search":
             ok = run_search(query)
         else:
-            # 檢查是否有 --eval 參數
+            # 檢查是否有 --eval 或 --mq 參數
             evaluate = "--eval" in sys.argv
-            # 如果 query 內容中包含了 --eval，將其移除
-            query = query.replace("--eval", "").strip()
-            ok = run_rag_pipeline(query, evaluate=evaluate)
+            use_mq = "--mq" in sys.argv or "--multi-query" in sys.argv
+            
+            # 清理 query 內容
+            query = query.replace("--eval", "").replace("--mq", "").replace("--multi-query", "").strip()
+            
+            ok = run_rag_pipeline(query, evaluate=evaluate, use_multi_query=use_mq)
     else:
         ok = runner()
     
