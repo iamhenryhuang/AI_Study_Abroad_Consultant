@@ -1,0 +1,29 @@
+{
+  "school_id": "Cornell-CS-MS",
+  "university": "Cornell University",
+  "program": "Master of Science in Computer Science (Research-oriented)",
+  "requirements": {
+    "toefl": {
+      "min_total": 100,
+      "is_required": true,
+      "notes": "Requires minimums: Speaking 22, Reading 20, Listening 15, Writing 20."
+    },
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
+    },
+    "gre": {
+      "status": "Not Considered",
+      "notes": "GRE scores are not required and will not be reviewed for MS applicants."
+    },
+    "minimum_gpa": 3.5,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-15",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://www.cs.cornell.edu/grad/ms",
+  "description_for_vector_db": "[Program Identity] The Cornell MS in CS is a 4-semester program that is fully funded. It is a research-intensive program where students serve as TAs or RAs. [Academic Excellence] Students have access to top-tier research in Ithaca and the Cornell Tech campus in NYC. [Path to PhD] Many MS students continue to Cornell’s PhD program. [Admission Insight] This is one of the most selective programs in the world, admitting only a handful of students each year. Exceptional research potential and a perfect or near-perfect GPA are usually necessary."
+}

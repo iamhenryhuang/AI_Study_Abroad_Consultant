@@ -1,0 +1,29 @@
+{
+  "school_id": "UCSD-CSE-MS",
+  "university": "University of California, San Diego",
+  "program": "Master of Science in Computer Science and Engineering",
+  "requirements": {
+    "toefl": {
+      "min_total": 85,
+      "is_required": true,
+      "notes": "Minimum score of 85 is required, but admitted students typically score 100+."
+    },
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
+    },
+    "gre": {
+      "status": "Not Required",
+      "notes": "GRE is not required for MS applications for the current cycle."
+    },
+    "minimum_gpa": 3.0,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-17",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://cse.ucsd.edu/graduate/graduate-admissions",
+  "description_for_vector_db": "[Program Overview] UCSD's MS in CSE offers a comprehensive curriculum with three options: Thesis, Comprehensive Exam, or Interdisciplinary. [Research Strengths] The department is a leader in Systems, Networking, Security, and Bioinformatics. It is home to the San Diego Supercomputer Center (SDSC). [Industry Connection] Located in La Jolla, UCSD has deep ties with San Diego's vibrant biotech and telecommunications industries (e.g., Qualcomm). [Admission Insight] The committee values a strong background in CS fundamentals. While GRE is currently waived, high GPAs and evidence of technical project experience are crucial for success."
+}

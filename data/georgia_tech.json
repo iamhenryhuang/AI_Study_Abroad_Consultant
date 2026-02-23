@@ -1,0 +1,29 @@
+{
+  "school_id": "GT-CS-MS",
+  "university": "Georgia Institute of Technology",
+  "program": "Master of Science in Computer Science",
+  "requirements": {
+    "toefl": {
+      "min_total": 100,
+      "is_required": true,
+      "notes": "Must score at least 100 on the iBT with a minimum of 19 in each section."
+    },
+    "ielts": {
+      "min_total": 7.5,
+      "is_required": true
+    },
+    "gre": {
+      "status": "Required",
+      "notes": "GRE is required for all MSCS applicants. Strong quantitative scores are expected."
+    },
+    "minimum_gpa": 3.0,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-02-01",
+    "spring_intake": "2025-09-01"
+  },
+  "official_link": "https://www.cc.gatech.edu/academics/degree-programs/masters/computer-science",
+  "description_for_vector_db": "[Program Breadth] Georgia Tech's MSCS offers 11 distinct specializations, including Computing Systems, Machine Learning, and Interactive Computing. [Flexibility] Students can choose between three options: Coursework-only, Project, or Thesis. [Career Powerhouse] Known as one of the best ROI (Return on Investment) programs, GT graduates are heavily recruited by top-tier tech companies globally. [Admission Insight] Competitive applicants typically have a GPA of 3.5 or higher and significant technical projects or internship experience."
+}

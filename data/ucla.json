@@ -1,0 +1,29 @@
+{
+  "school_id": "UCLA-CS-MS",
+  "university": "University of California, Los Angeles",
+  "program": "Master of Science in Computer Science",
+  "requirements": {
+    "toefl": {
+      "min_total": 87,
+      "is_required": true,
+      "notes": "Minimum scores: Writing 25, Speaking 24, Reading 21, Listening 17."
+    },
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
+    },
+    "gre": {
+      "status": "Required",
+      "notes": "GRE is required and is a critical part of the evaluation process."
+    },
+    "minimum_gpa": 3.3,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-15",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://www.cs.ucla.edu/graduate-requirements/",
+  "description_for_vector_db": "[Program Focus] UCLA's MSCS is known for its strong focus on AI, Bioinformatics, and Computer Systems. [Location Advantage] Located in Los Angeles, students have access to the growing 'Silicon Beach' tech scene. [Research & Industry] The program offers both thesis and comprehensive exam options, catering to both research-bound and industry-bound students. [Admission Insight] Very high GRE quantitative scores are expected. The committee values strong mathematical foundations and analytical skills."
+}

@@ -1,0 +1,29 @@
+{
+  "school_id": "UCB-EECS-MS",
+  "university": "University of California, Berkeley",
+  "program": "Master of Science in Electrical Engineering and Computer Sciences (Research-focused)",
+  "requirements": {
+    "toefl": {
+      "min_total": 90,
+      "is_required": true,
+      "notes": "Minimum score of 90 is required, but average scores for admitted students are often 100+."
+    },
+    "ielts": {
+      "min_total": 7.0,
+      "is_required": true
+    },
+    "gre": {
+      "status": "Not Required",
+      "notes": "GRE is not required for the MS/PhD and MS-only applications in EECS."
+    },
+    "minimum_gpa": 3.0,
+    "recommendation_letters": 3,
+    "interview_required": false
+  },
+  "deadlines": {
+    "fall_intake": "2025-12-15",
+    "spring_intake": "Not Available"
+  },
+  "official_link": "https://eecs.berkeley.edu/academics/graduate/prospects",
+  "description_for_vector_db": "[Program Nature] Berkeley's MS in EECS is a small, highly selective research-oriented program. It is often a stepping stone to a PhD, though it can be taken as a terminal degree. [Research Excellence] Students work in prestigious labs like BAIR (Berkeley AI Research) or the RISELab. The program is world-renowned for Systems, AI, and Theory. [Silicon Valley Synergy] Located next to the tech hub, Berkeley has deep ties with startups and giants alike. [Admission Insight] High emphasis on previous research publications and technical leadership. The committee looks for 'pioneers' who can push the boundaries of CS."
+}
