@@ -28,21 +28,21 @@ def verify_embeddings():
 
         # 1. 基本 chunk 清單
         cur.execute("""
-            SELECT school_id, chunk_index,
+            SELECT school_id, chunk_index, source,
                    LEFT(chunk_text, 70)    AS preview,
                    embedding IS NOT NULL   AS has_vector,
                    university_id IS NOT NULL AS has_fk,
                    metadata IS NOT NULL    AS has_meta
             FROM document_chunks
-            ORDER BY school_id, chunk_index
+            ORDER BY school_id, source, chunk_index
         """)
         rows = cur.fetchall()
 
         print(f"Total chunks in DB: {len(rows)}")
-        print(f"{'school_id':<25} {'chunk#':<7} {'vector':<8} {'fk':<5} {'meta':<6} preview")
-        print("-" * 100)
-        for school_id, idx, preview, has_vec, has_fk, has_meta in rows:
-            print(f"{school_id:<25} {idx:<7} {str(has_vec):<8} {str(has_fk):<5} {str(has_meta):<6} {preview!r}")
+        print(f"{'school_id':<15} {'source':<10} {'chunk#':<7} {'vector':<8} {'fk':<5} {'meta':<6} preview")
+        print("-" * 110)
+        for school_id, idx, source, preview, has_vec, has_fk, has_meta in rows:
+            print(f"{school_id:<15} {source:<10} {idx:<7} {str(has_vec):<8} {str(has_fk):<5} {str(has_meta):<6} {preview!r}")
 
         # 2. 向量維度
         cur.execute("SELECT embedding FROM document_chunks LIMIT 1")

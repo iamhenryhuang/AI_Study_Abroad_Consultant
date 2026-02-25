@@ -59,7 +59,7 @@ def format_context_for_prompt(context_docs: list[dict]) -> str:
         meta_text = " | ".join(meta_parts) if meta_parts else "無結構化資訊"
         
         doc_block = (
-            f"--- 來源 {i+1} ({univ} / {prog}) ---\n"
+            f"--- 來源 {i+1} ({univ} / {prog} / 來源: {doc.get('source', 'official')}) ---\n"
             f"[結構化資訊] {meta_text}\n"
             f"[詳細描述] {text}"
         )
@@ -81,22 +81,15 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
     # 組合 context，同時包含 chunk_text 與 結構化 metadata
     context_text = format_context_for_prompt(context_docs)
     
-    prompt = f"""你是一位專業的北美 CS 留學顧問，擅長分析各校官網數據並提供量身定制的申請策略。
-請根據提供的【參考資料】（包含學校硬性指標與背景描述）來回答使用者問題。
+    prompt = f"""角色：北美 CS 申請專家，需結合官方數據與社群實戰經驗回答。
 
-### 核心規則：
-1. **數據精確性**：GPA、TOEFL、IELTS、GRE、截止日期等數據必須嚴格遵循參考資料，不得隨意估算或編造。
-2. **語義深度整合**：請利用參考資料中的「詳細描述」，解釋該校的「研究風氣」、「就業趨勢」或「地理優勢」。
-3. **誠實原則**：若資料中缺少特定資訊，請回答「目前的資料庫中暫無此細節」，並引導使用者參考官方連結。
-4. **專業口吻**：語氣應專業、誠懇，適時以「建議」或「提醒」的方式與使用者對話。
-
-### 輸出格式規範（Markdown）：
-- **## 快速診斷**：簡短回答使用者的核心問題。
-- **### 顧問深度解析**：結合資料中的描述，提供具體的申請優勢或備註（例如：強調研究能力、實習機會等）。
-
-### 限制：
-- 僅使用繁體中文回答。
-- 嚴禁提及你是 AI 模型或任何關於資料庫檢索的技術術語。
+規則：
+1. 內容至上：直接切入重點，嚴禁任何開場白、客套話或重複內容。
+2. 禁表格與特殊符號：嚴禁使用 Markdown 表格結構。嚴禁使用星號（*）作為列表或強調符號。
+3. 純文字整理：請使用純文字段落或簡單的編號（如 1. 2. 3.）進行資訊整理。
+4. 視覺清爽：僅在必要時區分段落，保持版面極簡，不要有過多的 Markdown 標記。
+5. 來源識別：區分官方來源與 Reddit 經驗，直接在文字中註明「官方：」或「社群：」。
+6. 語言：繁體中文。
 
 --- 參考資料 ---
 {context_text}
@@ -104,7 +97,10 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
 --- 使用者問題 ---
 {query}
 
-請提供詳細且有條理的回答：
+輸出要求：
+1. 按學校區分重點，使用簡單的文字描述。
+2. 錄取門檻與實戰案例合併在敘事中，直接說重點。
+3. 嚴禁出現任何星號（*）字符。
 """
 
     try:
@@ -112,7 +108,9 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
             model=model_name,
             contents=prompt
         )
-        return response.text
+        # 額外清理：確保輸出中完全沒有星號
+        clean_text = response.text.replace("*", "")
+        return clean_text
     except Exception as e:
         print(f"[Gemini] 生成回答時發生錯誤: {e}")
         return None

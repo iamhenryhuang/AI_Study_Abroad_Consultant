@@ -41,6 +41,7 @@ def search_core(query: str, top_k: int = 3, use_rerank: bool = True) -> list[dic
                 SELECT 
                     dc.chunk_text, 
                     dc.metadata,
+                    dc.source,
                     u.university,
                     u.program,
                     1 - (dc.embedding <=> %s::vector) AS vector_score
@@ -95,6 +96,7 @@ def run_search(query: str, top_k: int = 3, use_rerank: bool = True):
             f"【結果 {i}】 {score_str}\n"
             f"學校: {res['university']}\n"
             f"學系: {res['program']}\n"
+            f"來源: {res.get('source', 'unknown')}\n"
             f"摘要: {res['chunk_text'].strip()[:600]}...\n"
         )
         

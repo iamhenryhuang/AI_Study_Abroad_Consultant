@@ -34,6 +34,7 @@ if str(SCRIPTS) not in sys.path:
 
 from db.ops import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
+from embedder.reddit_pipeline import run_reddit_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
 from retriever.rag_pipeline import run_rag_pipeline
@@ -44,6 +45,7 @@ COMMANDS = {
     "verify-db": ("檢查 SQL 資料是否已寫入", verify),
     "export": ("匯出至 db/exported_data.sql", export_sql),
     "embed": ("切片 + 向量化並寫入 document_chunks", run_pipeline),
+    "embed-reddit": ("處理 reddit_data 下的 JSON 並寫入向量庫", run_reddit_pipeline),
     "verify-vdb": ("檢查向量資料庫 (Vector DB) 狀態", verify_embeddings),
     "search": ("執行 RAG 檢索測試", lambda: run_search("UIUC MSCS requirements")),
     "rag": ("執行完整 RAG 回答 (檢索+重排+LLM)", lambda: run_rag_pipeline("CMU MSCS requirement")),
@@ -76,11 +78,14 @@ def main():
         if cmd == "search":
             ok = run_search(query)
         else:
-            # 檢查是否有 --eval 參數
+            # 檢查是否有 --eval 或 --mq 參數
             evaluate = "--eval" in sys.argv
-            # 如果 query 內容中包含了 --eval，將其移除
-            query = query.replace("--eval", "").strip()
-            ok = run_rag_pipeline(query, evaluate=evaluate)
+            use_mq = "--mq" in sys.argv or "--multi-query" in sys.argv
+            
+            # 清理 query 內容
+            query = query.replace("--eval", "").replace("--mq", "").replace("--multi-query", "").strip()
+            
+            ok = run_rag_pipeline(query, evaluate=evaluate, use_multi_query=use_mq)
     else:
         ok = runner()
     
