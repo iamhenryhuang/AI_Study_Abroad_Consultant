@@ -50,3 +50,8 @@ desktop.ini
 
 # 專案：匯出檔可選
 db/exported_data.sql
+
+# 專案：匯出檔可選
+universities_data.json
+temp_json_data/
+reddit_data/
