@@ -4,104 +4,197 @@ import time
 import argparse
 import random
 import urllib.parse
+import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright
 
-def crawl_reddit(query, limit=10, sort='relevance', timeframe='all', years=None):
+def crawl_reddit(university_name, limit=10, years=None, seen_urls=None, seen_titles=None):
     """
-    使用 Playwright 模擬瀏覽器抓取 Reddit 資料。
+    抓取特定學校的 Reddit 資料，極度嚴格篩選該校 CS Master 申請。
+    使用了更保守的流量控制與重試機制。
     """
-    print(f"[*] 正在準備獲取 Reddit 即時資料: '{query}'...")
-    
-    # 增加隨機延遲 (1.5s ~ 4s) 模擬人為操作
-    delay = random.uniform(2.0, 4.0)
-    print(f"[*] 流量控制：等待 {delay:.2f} 秒後再執行...")
-    time.sleep(delay)
+    if seen_urls is None:
+        seen_urls = set()
+    if seen_titles is None:
+        seen_titles = set()
 
-    # 為了過濾日期，我們抓取比需求更多的資料
-    fetch_limit = limit * 3 if years else limit
-    encoded_query = urllib.parse.quote(query)
-    search_url = f"https://www.reddit.com/search.json?q={encoded_query}&limit={fetch_limit}&sort={sort}&t={timeframe}"
+    uni_l = university_name.lower()
     
-    posts = []
+    # 搜尋語句：強制排除 phd 和 undergrad，僅搜尋碩士相關
+    base_queries = [
+        f'"{university_name}" cs (master OR MS OR MSCS OR MCS) (admission OR advice OR experience) -phd -undergrad',
+        f'"{university_name}" MSCS admission advice info',
+        f'"{university_name}" computer science graduate application SOP LOR'
+    ]
+    
+    all_posts = []
     current_time = time.time()
     seconds_in_year = 365 * 24 * 3600
     
+    def contains_word(text, word):
+        return bool(re.search(rf'\b{re.escape(word)}\b', text, re.I))
+
+    FORBIDDEN_KWS = ['phd', 'ph.d', 'doctorate', 'doctoral', 'undergrad', 'bachelor', 'sat', 'high school']
+    MASTER_KWS = ['master', 'ms', 'mscs', 'mcs', 'graduate', 'grad school']
+    TOPIC_KWS = ['admission', 'advice', 'experience', 'sop', 'lor', 'profile', 'apply', 'applying', 'decision', 'result', 'interview', 'review']
+
+    # 品質、背景與成功案例過濾基準 (最高品質模式)
+    MIN_CONTENT_LENGTH = 400  # 提高門檻，確保是完整經驗分享
+    ADMISSION_INFO_KWS = ['gpa', 'gre', 'sop', 'lor', 'profile', 'portfolio', 'internship', 'research', 'work experience', 'toefl', 'cv']
+    
+    # 成功錄取錄取關鍵字
+    ADMIT_SUCCESS_KWS = ['accepted', 'admitted', 'got in', 'incoming', 'decision', 'result', 'offer', 'admission', 'enrolled']
+    # 純求建議/評估的排除字 (除非同時有錄取結果)
+    PURE_ADVICE_KWS = ['chance me', 'chances', 'should i apply', 'evaluating', 'evaluation', 'eval', 'help', 'planning to apply', 'plan to apply']
+
+    # 專門排除「非 CS 本科」或「轉專業」的關鍵字
+    NON_CS_EXCLUSION_KWS = [
+        'non-cs', 'non cs', 'career changer', 'switching to cs', 'switch to cs', 
+        'bridge program', 'conversion', 'pivot', 'non-tech', 'liberal arts',
+        'information systems', 'business major', 'mechanical engineer', 'civil engineer'
+    ]
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={'width': 1920, 'height': 1080},
-            extra_http_headers={
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Referer": "https://www.reddit.com/"
-            }
+            java_script_enabled=True,
+            viewport={'width': 1280, 'height': 720}
         )
         
-        # Stealth init script
-        context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        page = context.new_page()
-        
-        try:
-            print(f"[*] 正在訪問 Reddit 搜尋接口...")
-            response = page.goto(search_url, wait_until="networkidle", timeout=30000)
-            
-            if response.status == 200:
+        for base_q in base_queries:
+            if len(all_posts) >= limit:
+                break
+                
+            retries = 0
+            max_retries = 2
+            wait_time = 60 
+
+            while retries <= max_retries:
+                print(f"[*] 正在獲取: '{base_q}' (嘗試 {retries+1}/{max_retries+1})...")
+                encoded_query = urllib.parse.quote(base_q)
+                search_url = f"https://www.reddit.com/search.json?q={encoded_query}&limit=60&sort=relevance&t=all"
+                
+                page = context.new_page()
                 try:
-                    data = response.json()
-                    children = data.get('data', {}).get('children', [])
-                    print(f"[*] 找到 {len(children)} 篇原始文章。")
+                    time.sleep(random.uniform(5.0, 10.0))
+                    response = page.goto(search_url, wait_until="networkidle", timeout=60000)
                     
-                    if not children:
-                        print("[!] 查無資料 (children 為空)。")
-                        return []
+                    if response.status == 200:
+                        data = response.json()
+                        children = data.get('data', {}).get('children', [])
                         
-                    for child in children:
-                        if len(posts) >= limit:
-                            break
+                        for child in children:
+                            if len(all_posts) >= limit:
+                                break
+                                
+                            p_data = child.get('data', {})
+                            url = f"https://www.reddit.com{p_data.get('permalink')}"
+                            title = p_data.get('title', '')
+                            content = p_data.get('selftext', '')[:5000]
+                            num_comments = p_data.get('num_comments', 0)
+                            created_utc = p_data.get('created_utc')
+                            subreddit = p_data.get('subreddit', '').lower()
                             
-                        p_data = child.get('data', {})
-                        created_utc = p_data.get('created_utc')
-                        
-                        # 日期過濾 (例如：兩年內)
-                        if years and created_utc:
-                            age_years = (current_time - created_utc) / seconds_in_year
-                            if age_years > years:
-                                # print(f"DEBUG: 跳過文章 (年齡: {age_years:.2f} 年)")
+                            t_l = title.lower()
+                            c_l = content.lower()
+
+                            # --- 核心嚴格品質、背景與「錄取成功感」過濾 ---
+                            
+                            # 1. 基本去重
+                            clean_title = "".join(filter(str.isalnum, t_l))
+                            if url in seen_urls or (clean_title and clean_title in seen_titles):
+                                continue
+                            
+                            # 2. 排除情緒廢文或髒話
+                            if any(re.search(rf'\b{re.escape(bad)}\b', text) for bad in ['fuck', 'shit', 'suck', 'damn'] for text in [t_l, c_l]):
+                                if len(content) < 500: continue
+
+                            # 3. 排除 PhD / 大學部 (SAT, High School)
+                            if any(contains_word(t_l, kw) or contains_word(c_l, kw) for kw in FORBIDDEN_KWS):
+                                continue
+
+                            # 4. 排除「非 CS 本科 / 轉專業」內容 (NON_CS_EXCLUSION_KWS)
+                            if any(contains_word(t_l, kw) or contains_word(c_l, kw) for kw in NON_CS_EXCLUSION_KWS):
+                                continue
+                            
+                            # 5. 重點：錄取成功性過濾 (Admission Success Only)
+                            # 檢查是否有錄取關鍵字
+                            is_success_story = any(contains_word(t_l, kw) or contains_word(c_l, kw) for kw in ADMIT_SUCCESS_KWS)
+                            is_pure_asking = any(contains_word(t_l, kw) or contains_word(c_l, kw) for kw in PURE_ADVICE_KWS)
+                            
+                            # 如果只是單純在問問題 (Pure Asking) 且 沒提到錄取/結果，則過濾
+                            if is_pure_asking and not is_success_story:
+                                continue
+                            
+                            # 特別加強：如果是 Profile Review 但沒說結果，也要過濾
+                            if 'profile' in t_l and not is_success_story:
+                                continue
+
+                            # 6. 學校關聯度檢查
+                            if not contains_word(t_l, uni_l) and subreddit != uni_l:
+                                if len(re.findall(rf'\b{re.escape(uni_l)}\b', c_l, re.I)) < 2:
+                                    continue
+                            
+                            # 7. 確保是碩士主題
+                            if not any(contains_word(t_l, kw) or contains_word(c_l, kw) for kw in MASTER_KWS):
                                 continue
                                 
-                        posts.append({
-                            "title": p_data.get('title'),
-                            "url": f"https://www.reddit.com{p_data.get('permalink')}",
-                            "content": p_data.get('selftext', '')[:5000]
-                        })
-                    
-                except json.JSONDecodeError:
-                    print("[!] 解析 JSON 失敗。")
-                    return []
-            else:
-                print(f"[!] 抓取失敗 (HTTP 狀態碼: {response.status})。")
-                return []
-                
-        except Exception as e:
-            print(f"[!] 發生異常錯誤: {e}")
-            return None
-        finally:
-            browser.close()
+                            # 8. 資訊密度與申請經驗檢查
+                            has_admission_data = any(contains_word(c_l, kw) for kw in ADMISSION_INFO_KWS)
+                            if len(content) < MIN_CONTENT_LENGTH or not has_admission_data:
+                                continue
+                            
+                            # 最終確認：這篇文章是否真的是「經驗分享」而不僅是「一個問題」
+                            if not is_success_story and len(content) < 1000:
+                                # 若沒提到錄取，必須非常長且專業才考慮
+                                continue
+
+                            # 9. 時間過濾
+                            if years and created_utc:
+                                if (current_time - created_utc) / seconds_in_year > years:
+                                    continue
+                                    
+                            seen_urls.add(url)
+                            if clean_title: seen_titles.add(clean_title)
+                            all_posts.append({
+                                "title": title,
+                                "url": url,
+                                "content": content,
+                                "num_comments": num_comments
+                            })
+                        print(f"[*] 本次有效累積: {len(all_posts)}/{limit}")
+                        break
+                        
+                    elif response.status == 403:
+                        print(f"[!] 遭遇 403 流量限制，等待 {wait_time} 秒後重試...")
+                        time.sleep(wait_time)
+                        wait_time *= 2 # 指數退避
+                        retries += 1
+                    else:
+                        print(f"[!] 請求失敗 (HTTP {response.status})")
+                        break
+                except Exception as e:
+                    print(f"[!] 錯誤: {e}")
+                    break
+                finally:
+                    page.close()
             
-    return posts
+            if retries > max_retries:
+                print(f"[!] 達到最大重試次數，跳過此查詢。")
+
+        browser.close()
+            
+    return all_posts
 
 def main():
-    parser = argparse.ArgumentParser(description="Reddit 即時資料爬蟲程式")
-    parser.add_argument("--query", type=str, help="手動指定搜尋關鍵字 (多個關鍵字以逗號分隔)")
-    parser.add_argument("--limit", type=int, default=10, help="抓取數量")
-    parser.add_argument("--years", type=int, default=2, help="限制在幾年內的資料")
+    parser = argparse.ArgumentParser(description="Reddit 高品質資料爬蟲")
+    parser.add_argument("--query", type=str, help="指定學校 (多個以逗號分隔)")
+    parser.add_argument("--limit", type=int, default=10, help="每校數量")
+    parser.add_argument("--years", type=int, default=2, help="資料年份限制")
     
     args = parser.parse_args()
 
-    # 設定目錄路徑
     current_script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_script_dir)
     data_dir = os.path.join(project_root, "data")
@@ -110,42 +203,42 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         
-    queries = []
+    university_names = []
     if args.query:
-        # 如果使用者有手動輸入，優先使用
-        queries = [q.strip() for q in args.query.split(',')]
+        university_names = [q.strip() for q in args.query.split(',')]
     else:
-        # 自動從 /data 讀取學校名稱
         if os.path.exists(data_dir):
             files = [f for f in os.listdir(data_dir) if f.endswith('.json')]
+            # 排除已成功抓取且數量足夠的學校 (可選，但為了安全我們先全跑一遍以更新品質)
             for f in files:
-                university_name = f.replace('.json', '')
-                queries.append(f"{university_name} cs master admission advice")
+                university_names.append(f.replace('.json', ''))
         
-        # 若 /data 為空，則使用預設
-        if not queries:
-            queries = ["cmu cs master admission advice", "uiuc cs master admission advice"]
+        if not university_names:
+            university_names = ["cmu", "uiuc", "stanford", "mit"]
 
-    print(f"[*] 預計爬取 {len(queries)} 個項目...")
+    print(f"[*] 任務開始：預計處理 {len(university_names)} 間學校...")
+    print("[*] 提示：為避免封鎖，速度目前設定為極慢模式。")
 
-    for i, query in enumerate(queries):
-        # 檔案安全命名
-        file_safe_query = query.split("admission")[0].strip().replace(" ", "_").lower()
-        output_file = os.path.join(output_dir, f"{file_safe_query}_reddit.json")
+    global_seen_urls = set()
+    global_seen_titles = set()
+
+    for i, uni in enumerate(university_names):
+        output_file = os.path.join(output_dir, f"{uni.lower()}_cs_master_reddit.json")
         
-        results = crawl_reddit(query, limit=args.limit, years=args.years)
+        # 爬取資料
+        results = crawl_reddit(uni, limit=args.limit, years=args.years, 
+                             seen_urls=global_seen_urls, seen_titles=global_seen_titles)
         
         if results:
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=4, ensure_ascii=False)
-            print(f"[+] 成功儲存 '{query}' 資料至: {output_file}")
+            print(f"[+] '{uni}' 更新完成 ({len(results)} 篇)")
         else:
-            print(f"[!] '{query}' 爬取失敗或查無資料。")
+            print(f"[!] '{uni}' 未能取得新資料。")
             
-        # 學校與學校之間增加更長的隨機休息時間，避免被 Reddit 判定為機器人
-        if i < len(queries) - 1:
-            interval = random.uniform(5.0, 10.0)
-            print(f"[*] 項目間休息中：等待 {interval:.2f} 秒後進行下一個項目...")
+        if i < len(university_names) - 1:
+            interval = random.uniform(20.0, 40.0)
+            print(f"[*] 長時間休息中：等待 {interval:.2f} 秒再處理下一間學校...")
             time.sleep(interval)
 
 if __name__ == "__main__":
