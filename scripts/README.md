@@ -9,18 +9,16 @@ This directory contains scripts for database management, text vectorization (emb
   - `ops.py`: DB setup, JSON data import, and SQL export.
   - `connection.py`: PostgreSQL connection management.
 - `embedder/`: Logic for text chunking and vectorization.
-  - `pipeline.py`: Main pipeline to chunk description text and store embeddings in `document_chunks`.
-  - `vectorize.py`: Integration with **BGE-M3** model for high-quality embeddings.
-  - `chunker.py`: Text splitting logic.
-  - `verifier.py`: Tool to verify the status of the Vector DB.
+  - `pipeline.py`: Main pipeline to chunk official descriptions.
+  - `reddit_pipeline.py`: Pipeline for processing Reddit JSON data with larger chunks (1500 chars).
+  - `vectorize.py`: Integration with **BGE-M3** model.
+  - `store.py`: Handles upserting chunks with `source` labels ('official' or 'reddit').
+  - `verifier.py`: Tool to verify Vector DB status (grouped by source).
 - `retriever/`: Logic for RAG search.
-  - `search.py`: Implementation of vector similarity search using pgvector.
-  - `multi_query.py`: Multi-Query expansion logic using LLM.
-  - `rag_pipeline.py`: Orchestration of the full RAG flow (Search + Rerank + LLM).
+  - `search.py`: Vector search with source column selection.
+  - `rag_pipeline.py`: Orchestration with default `top_k=7` for hybrid results.
 - `generator/`: Logic for LLM answer generation.
-  - `gemini.py`: Integration with **Gemini 2.5 Flash** for final answer synthesis.
-- `evaluator/`: RAG quality evaluation (RAG Triad).
-  - `rag_evaluation.py`: Uses Gemini as a judge to score Context Relevance, Faithfulness, and Answer Relevance.
+  - `gemini.py`: Adaptive prompt handling (Data-driven vs. Narrative-driven).
 
 ---
 
@@ -33,39 +31,30 @@ Run these commands from the **project root directory**:
   ```bash
   python scripts/run.py init-all
   ```
-- **Verify SQL Data**:
-  ```bash
-  python scripts/run.py verify-db
-  ```
 
-### 2. Embedding Pipeline
-- **Run Embedding Pipeline**:
+### 2. Embedding Pipelines
+- **Official Data Embedding**:
   ```bash
   python scripts/run.py embed
   ```
-- **Verify Vector DB Status**:
+- **Reddit Data Embedding**:
+  ```bash
+  python scripts/run.py embed-reddit
+  ```
+- **Verify Vector Status**:
   ```bash
   python scripts/run.py verify-vdb
   ```
 
-### 3. RAG Search, Generation & Evaluation
-- **Execute Search Only (Retrieval + Rerank)**:
+### 3. RAG Search & Generation
+- **Execute Search Only**:
   ```bash
   python scripts/run.py search "your query"
   ```
-- **Execute Full RAG (Search + Answer)**:
+- **Execute Full RAG**:
   ```bash
   python scripts/run.py rag "your query"
   ```
-- **Execute Full RAG with Quality Evaluation (RAG Triad)**:
-  ```bash
-  python scripts/run.py rag "your query" --eval
-  ```
-- **Execute Full RAG with Multi-Query Expansion**:
-  ```bash
-  python scripts/run.py rag "your query" --mq
-  ```
-  *Example: `python scripts/run.py rag "MIT CS admission requirements" --mq`*
 
 ---
 

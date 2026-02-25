@@ -59,7 +59,7 @@ def format_context_for_prompt(context_docs: list[dict]) -> str:
         meta_text = " | ".join(meta_parts) if meta_parts else "無結構化資訊"
         
         doc_block = (
-            f"--- 來源 {i+1} ({univ} / {prog}) ---\n"
+            f"--- 來源 {i+1} ({univ} / {prog} / 來源: {doc.get('source', 'official')}) ---\n"
             f"[結構化資訊] {meta_text}\n"
             f"[詳細描述] {text}"
         )
@@ -81,16 +81,15 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
     # 組合 context，同時包含 chunk_text 與 結構化 metadata
     context_text = format_context_for_prompt(context_docs)
     
-    prompt = f"""# Role
-你是一個極度專業、精簡且數據驅動的「北美 CS 申請數據分析官」。你的目標是從檢索到的資料中提取核心指標，拒絕任何無意義的修辭。
+    prompt = f"""角色：北美 CS 申請專家，需結合官方數據與社群實戰經驗回答。
 
-# Rules
-1. **直接回答**：嚴禁開場白（如「很高興為您...」）和結尾客套話。直接進入數據。
-2. **數據優先**：所有的陳述必須優先尋找數字（GPA, TOEFL, GRE, Deadlines）。必須嚴格遵循【參考資料】，不得編造。
-3. **區分門檻**：明確區分「官方最低要求」與「實戰建議/錄取平均值」。若資料中無實戰數據，請標註「無具體數據，建議諮詢校友」。
-4. **禁止修飾語**：嚴禁使用「頂尖」、「卓越」、「無與倫比」、「極具挑戰性」等形容詞。
-5. **結構化**：使用 Markdown 表格或精簡列表展示硬性要求。
-6. **限制**：僅使用繁體中文回答。嚴禁提及你是 AI 模型。
+規則：
+1. 內容至上：直接切入重點，嚴禁任何開場白、客套話或重複內容。
+2. 禁表格與特殊符號：嚴禁使用 Markdown 表格結構。嚴禁使用星號（*）作為列表或強調符號。
+3. 純文字整理：請使用純文字段落或簡單的編號（如 1. 2. 3.）進行資訊整理。
+4. 視覺清爽：僅在必要時區分段落，保持版面極簡，不要有過多的 Markdown 標記。
+5. 來源識別：區分官方來源與 Reddit 經驗，直接在文字中註明「官方：」或「社群：」。
+6. 語言：繁體中文。
 
 --- 參考資料 ---
 {context_text}
@@ -98,17 +97,10 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
 --- 使用者問題 ---
 {query}
 
-# Output Format
-## [學校項目名稱] 核心要求
-- **GPA**: {{官方要求}} (實戰建議: {{數據/無}})
-- **語言**: {{TOEFL/IELTS}}
-- **GRE**: {{Required/Optional/Not Required}}
-- **Deadline**: {{日期}}
-
-### 關鍵分析 (條列式)
-- [申請屬性]: (例如：僅限 PhD 直攻 / 就業導向 / 強科研)
-- [特殊細節]: (例如：不收非本科、需要特定先修課)
-- [下一步建議]: (針對該校特性的具體行動)。
+輸出要求：
+1. 按學校區分重點，使用簡單的文字描述。
+2. 錄取門檻與實戰案例合併在敘事中，直接說重點。
+3. 嚴禁出現任何星號（*）字符。
 """
 
     try:
@@ -116,7 +108,9 @@ def generate_answer(query: str, context_docs: list[dict], model_name: str = "gem
             model=model_name,
             contents=prompt
         )
-        return response.text
+        # 額外清理：確保輸出中完全沒有星號
+        clean_text = response.text.replace("*", "")
+        return clean_text
     except Exception as e:
         print(f"[Gemini] 生成回答時發生錯誤: {e}")
         return None

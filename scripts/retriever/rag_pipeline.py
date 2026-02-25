@@ -16,7 +16,7 @@ from retriever.multi_query import search_with_multi_query
 from generator.gemini import generate_answer
 from evaluator.rag_evaluation import run_triad_evaluation
 
-def run_rag_pipeline(query: str, top_k: int = 3, evaluate: bool = False, use_multi_query: bool = False):
+def run_rag_pipeline(query: str, top_k: int = 7, evaluate: bool = False, use_multi_query: bool = False):
     """
     執行完整的 RAG 流程。
     Args:

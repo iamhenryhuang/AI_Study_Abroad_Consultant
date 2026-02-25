@@ -46,13 +46,14 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     id            SERIAL PRIMARY KEY,
     school_id     VARCHAR(100) NOT NULL,
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+    source        VARCHAR(50) DEFAULT 'official', -- 'official' or 'reddit'
     chunk_index   INTEGER NOT NULL,
     chunk_text    TEXT NOT NULL,
     embedding     vector(1024),
     -- 結構化 metadata：存入數字/日期欄位，供 hybrid query WHERE 過濾
     metadata      JSONB,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (school_id, chunk_index)
+    UNIQUE (school_id, source, chunk_index)
 );
 
 -- GIN index：加速 metadata JSONB 欄位的條件查詢
