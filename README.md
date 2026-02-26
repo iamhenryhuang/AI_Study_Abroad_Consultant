@@ -10,7 +10,7 @@ RAG-based consultant for applying to North American CS master's programs. Crawls
 
 ## Data Format
 
-`data/school_info.json` uses a flat `{ url: raw_text }` structure:
+`data/*.json` (e.g., `caltech.json`, `cmu.json`) uses a flat `{ url: raw_text }` structure:
 
 ```json
 {
@@ -19,7 +19,7 @@ RAG-based consultant for applying to North American CS master's programs. Crawls
 }
 ```
 
-The school (`cmu`, `caltech`, …) is inferred automatically from the URL domain. To add a new school, add one entry to `SCHOOL_MAP` in `scripts/embedder/pipeline.py`.
+The pipeline processes every JSON in the `data/` folder. The school (`cmu`, `caltech`, …) is inferred automatically from the URL domain or the filename. To add a new school, update `SCHOOL_MAP` in `scripts/embedder/pipeline.py`.
 
 ---
 
@@ -27,7 +27,7 @@ The school (`cmu`, `caltech`, …) is inferred automatically from the URL domain
 
 ```
 data/
-  school_info.json      ← { url: raw_text } — one file, all schools
+  *.json                ← { url: raw_text } — school-specific JSON files
 db/
   init_db.sql           ← schema: universities + web_pages + document_chunks
 scripts/

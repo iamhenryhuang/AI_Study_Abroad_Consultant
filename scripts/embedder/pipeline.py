@@ -44,24 +44,67 @@ SCHOOL_MAP: dict[str, dict] = {
         "school_id": "caltech",
         "name": "California Institute of Technology",
     },
-    # 未來新增學校只要在此新增一列即可
-    # "stanford.edu": {"school_id": "stanford", "name": "Stanford University"},
+    "stanford.edu": {
+        "school_id": "stanford",
+        "name": "Stanford University",
+    },
+    "berkeley.edu": {
+        "school_id": "berkeley",
+        "name": "UC Berkeley",
+    },
+    "mit.edu": {
+        "school_id": "mit",
+        "name": "MIT",
+    },
+    "gatech.edu": {
+        "school_id": "gatech",
+        "name": "Georgia Tech",
+    },
+    "illinois.edu": {
+        "school_id": "uiuc",
+        "name": "UIUC",
+    },
+    "cornell.edu": {
+        "school_id": "cornell",
+        "name": "Cornell University",
+    },
+    "ucla.edu": {
+        "school_id": "ucla",
+        "name": "UCLA",
+    },
+    "ucsd.edu": {
+        "school_id": "ucsd",
+        "name": "UC San Diego",
+    },
+    "washington.edu": {
+        "school_id": "uw",
+        "name": "University of Washington",
+    },
 }
 
 
-def identify_school(url: str) -> dict | None:
+def identify_school(url: str, filename_hint: str | None = None) -> dict | None:
     """
     從 URL 的 domain 找出對應學校資訊。
+    若識別失敗，則嘗試使用 filename_hint。
     回傳 {'school_id': ..., 'name': ..., 'domain': ...}，若無法識別則回傳 None。
     """
     try:
         hostname = urlparse(url).hostname or ""
     except Exception:
-        return None
+        hostname = ""
 
+    # 1. 優先從 URL 識別
     for domain, info in SCHOOL_MAP.items():
         if domain in hostname:
             return {**info, "domain": hostname}
+
+    # 2. 回退到 filename_hint 識別
+    if filename_hint:
+        for domain, info in SCHOOL_MAP.items():
+            if info["school_id"] == filename_hint.lower() or filename_hint.lower() in info["name"].lower():
+                return {**info, "domain": hostname or f"{filename_hint}.edu"}
+
     return None
 
 
@@ -200,8 +243,9 @@ def run_pipeline(data_dirname: str = "data") -> bool:
                     skipped += 1
                     continue
 
-                # 識別學校
-                school_info = identify_school(url)
+                # 識別學校（帶入檔名作為提示）
+                filename_hint = path.stem  # e.g. 'caltech'
+                school_info = identify_school(url, filename_hint=filename_hint)
                 if not school_info:
                     print(f"無法識別學校（未知 domain），跳過：{url[:80]}")
                     skipped += 1

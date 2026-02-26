@@ -78,21 +78,28 @@ python scripts/run.py rag "Caltech GRE policy" --school caltech --eval
 
 ### Data format
 
-`data/school_info.json`:
+`data/*.json` (e.g., `caltech.json`, `cmu.json`):
 ```json
 { "https://url1": "raw crawled text...", "https://url2": "raw text..." }
 ```
+The pipeline automatically processes every `.json` file in the `data/` directory.
+It uses the URL domain or the file name to identify the school.
 
-### School identification
+The school is inferred from the URL domain (primary) or filename (fallback) via `SCHOOL_MAP` in `pipeline.py`. Currently supported schools:
 
-The school is inferred from the URL domain via `SCHOOL_MAP` in `pipeline.py`:
-
-| Domain | school_id |
-|--------|-----------|
-| `cmu.edu` | `cmu` |
-| `caltech.edu` | `caltech` |
-
-To add a school, add one line to `SCHOOL_MAP`.
+| school_id | University Name |
+|-----------|-----------------|
+| `cmu` | Carnegie Mellon University |
+| `caltech` | California Institute of Technology |
+| `stanford` | Stanford University |
+| `berkeley` | UC Berkeley |
+| `mit` | MIT |
+| `uiuc` | UIUC |
+| `gatech` | Georgia Tech |
+| `cornell` | Cornell University |
+| `ucla` | UCLA |
+| `ucsd` | UC San Diego |
+| `uw` | University of Washington |
 
 ### Chunk sizes by page type
 
