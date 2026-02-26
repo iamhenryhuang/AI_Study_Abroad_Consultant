@@ -1,36 +1,83 @@
-# Study Abroad RAG — North America CS Master’s
+# Study Abroad RAG — North America CS Master's
 
-RAG-based tool for applying to North America CS master’s programs. Pulls in official requirements (GPA, TOEFL, deadlines) and Reddit-style experience; surfaces both and helps resolve conflicts.
+RAG-based consultant for applying to North American CS master's programs. Crawls official university pages and processes the raw text into a vector database for semantic retrieval and LLM-powered advice.
 
-**Stack:** Gemini 2.5 Flash, `BAAI/bge-m3` embeddings, PostgreSQL + **pgvector (HNSW Index)**, LangChain, FastAPI. Scraping via Firecrawl / LLM extraction.
+**Stack:** Gemini 2.5 Flash · `BAAI/bge-m3` embeddings · PostgreSQL + **pgvector (HNSW)** · LangChain · Cross-Encoder reranking
 
-**Flow:** Scrape → structure into Postgres (hard facts) + **chunk & embed** into pgvector (text). Query = SQL filter + **vector search**; results + user profile go to LLM for advice.
+**Flow:** Crawl URLs → store raw text → chunk by page type → embed → pgvector. Query → vector search (+ optional school filter) → rerank → Gemini answer.
 
 ---
 
-## data/ & reddit_data/
+## Data Format
 
-- `data/` — official university requirements (GPA, TOEFL, GRE, deadlines)
-- `reddit_data/` — community posts and application experiences from Reddit
+`data/school_info.json` uses a flat `{ url: raw_text }` structure:
 
-## scripts/
+```json
+{
+  "https://www.cs.cmu.edu/academics/graduate-admissions": "Carnegie Mellon University...",
+  "https://www.gradoffice.caltech.edu/admissions/faq-applicants": "Frequently Asked Questions..."
+}
+```
 
-- **`run.py`** — main entry: DB operations, embedding pipeline, and RAG search
-- `db/` — modules: connection, setup, data import/export
-- `embedder/` — modules: official and reddit specific embedding pipelines
-- `retriever/` — modules: vector similarity search and RAG orchestration
-- `evaluator/` — modules: RAG Triad evaluation using Gemini as a judge
+The school (`cmu`, `caltech`, …) is inferred automatically from the URL domain. To add a new school, add one entry to `SCHOOL_MAP` in `scripts/embedder/pipeline.py`.
 
-**Quick start:**
+---
 
-1. Copy `.env.example` → `.env`, set `DATABASE_URL` and `GOOGLE_API_KEY`
+## Project Structure
+
+```
+data/
+  school_info.json      ← { url: raw_text } — one file, all schools
+db/
+  init_db.sql           ← schema: universities + web_pages + document_chunks
+scripts/
+  run.py                ← unified entry point
+  db/                   ← connection, setup, import/export
+  embedder/             ← chunker, pipeline, vectorize, store, verifier
+  retriever/            ← search, reranker, multi_query, rag_pipeline
+  evaluator/            ← RAG Triad evaluation (Gemini as judge)
+  generator/            ← Gemini answer generation
+```
+
+---
+
+## Quick Start
+
+1. Copy `.env.example` → `.env`, fill in `DATABASE_URL` and `GOOGLE_API_KEY`
 2. `pip install -r requirements.txt`
-3. From project root:
-   - `python scripts/run.py init-all` — init DB & import official JSON
-   - `python scripts/run.py embed` — run official embedding pipeline
-   - `python scripts/run.py embed-reddit` — run reddit-specific embedding pipeline
-   - `python scripts/run.py rag "your query" --eval` — execute RAG answer with adaptive prompts
-   - `python scripts/run.py rag "your query" --mq` — execute RAG with Multi-Query expansion
-   - `python scripts/run.py search "your query"` — test RAG retrieval (shows official vs reddit source)
-   - `python scripts/run.py verify-vdb` — check Vector DB status (official/reddit breakdown)
-   - `python scripts/run.py export` — write `db/exported_data.sql`
+3. From the project root:
+
+```bash
+# First-time setup: create DB + build tables + chunk + embed (all-in-one)
+python scripts/run.py init-all
+
+# Or step by step:
+python scripts/run.py setup       # create study_abroad database
+python scripts/run.py import      # build schema, chunk, embed & store
+
+# Verify
+python scripts/run.py verify-db   # check SQL tables
+python scripts/run.py verify-vdb  # check chunk counts & vector dims
+
+# Search & RAG
+python scripts/run.py search "CMU SCS admission requirements"
+python scripts/run.py search "Caltech PhD funding" --school caltech
+
+python scripts/run.py rag "What are CMU MSCS requirements?"
+python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
+python scripts/run.py rag "Caltech GRE policy" --school caltech --eval
+
+# Export SQL summary
+python scripts/run.py export
+```
+
+---
+
+## Chunk Size by Page Type
+
+| URL contains | page_type | chunk_size |
+|---|---|---|
+| `faq` | faq | 1200 chars |
+| `checklist` / `requirements` | checklist | 600 chars |
+| `admissions` / `apply` | admissions | 800 chars |
+| anything else | general | 700 chars |

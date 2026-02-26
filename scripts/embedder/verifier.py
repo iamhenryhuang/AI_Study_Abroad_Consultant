@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-驗證 document_chunks 資料表中的向量與 metadata 是否已正確寫入。
+verifier.py — 驗證向量資料庫內容（v2）
+
+配合新 schema（web_pages + document_chunks）驗證資料是否正確寫入。
 """
-import os
-import json
 import sys
 from pathlib import Path
 
-# 讓 scripts 目錄在 path 中
 CURRENT_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = CURRENT_DIR.parent
 ROOT_DIR = SCRIPTS_DIR.parent
@@ -17,48 +16,88 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from db.connection import get_connection
 
-def verify_embeddings():
-    """檢查向量資料庫內容。"""
+
+def verify_embeddings() -> bool:
+    """檢查向量資料庫（v2 schema）內容。"""
     conn = get_connection()
     if not conn:
         return False
-    
+
     try:
         cur = conn.cursor()
 
-        # 1. 基本 chunk 清單
+        # 1. 學校 + 頁面統計
         cur.execute("""
-            SELECT school_id, chunk_index, source,
-                   LEFT(chunk_text, 70)    AS preview,
-                   embedding IS NOT NULL   AS has_vector,
-                   university_id IS NOT NULL AS has_fk,
-                   metadata IS NOT NULL    AS has_meta
-            FROM document_chunks
-            ORDER BY school_id, source, chunk_index
+            SELECT
+                u.school_id,
+                u.name,
+                COUNT(DISTINCT wp.id)  AS page_count,
+                COUNT(dc.id)           AS chunk_count,
+                SUM(dc.embedding IS NOT NULL::int) AS has_vector
+            FROM universities u
+            LEFT JOIN web_pages wp ON wp.university_id = u.id
+            LEFT JOIN document_chunks dc ON dc.university_id = u.id
+            GROUP BY u.id, u.school_id, u.name
+            ORDER BY u.school_id
         """)
         rows = cur.fetchall()
+        print(f"\n{'學校 ID':<12} {'學校名稱':<40} {'頁面數':<8} {'chunk數':<10} {'向量數'}")
+        print("-" * 90)
+        for sid, name, pages, chunks, vecs in rows:
+            print(f"{sid:<12} {name:<40} {pages:<8} {chunks:<10} {vecs}")
 
-        print(f"Total chunks in DB: {len(rows)}")
-        print(f"{'school_id':<15} {'source':<10} {'chunk#':<7} {'vector':<8} {'fk':<5} {'meta':<6} preview")
-        print("-" * 110)
-        for school_id, idx, source, preview, has_vec, has_fk, has_meta in rows:
-            print(f"{school_id:<15} {source:<10} {idx:<7} {str(has_vec):<8} {str(has_fk):<5} {str(has_meta):<6} {preview!r}")
+        # 2. 每頁面類型的 chunk 數
+        cur.execute("""
+            SELECT school_id, page_type, COUNT(*) AS cnt
+            FROM document_chunks
+            GROUP BY school_id, page_type
+            ORDER BY school_id, page_type
+        """)
+        rows = cur.fetchall()
+        print(f"\n{'學校':<12} {'頁面類型':<20} {'chunk數'}")
+        print("-" * 45)
+        for sid, ptype, cnt in rows:
+            print(f"{sid:<12} {ptype:<20} {cnt}")
 
-        # 2. 向量維度
-        cur.execute("SELECT embedding FROM document_chunks LIMIT 1")
+        # 3. 抽查幾筆 chunk 預覽
+        cur.execute("""
+            SELECT
+                dc.school_id,
+                dc.page_type,
+                dc.chunk_index,
+                dc.source_url,
+                LEFT(dc.chunk_text, 80) AS preview,
+                dc.embedding IS NOT NULL AS has_vector
+            FROM document_chunks dc
+            ORDER BY dc.school_id, dc.page_type, dc.chunk_index
+            LIMIT 10
+        """)
+        rows = cur.fetchall()
+        print(f"\n--- 抽查前 10 筆 chunk ---")
+        for sid, ptype, idx, url, preview, has_vec in rows:
+            print(f"  [{sid}][{ptype}] chunk#{idx} vec={has_vec}")
+            print(f"    URL: {url[-60:]}")
+            print(f"    預覽: {preview!r}")
+
+        # 4. 向量維度確認
+        cur.execute("SELECT embedding FROM document_chunks WHERE embedding IS NOT NULL LIMIT 1")
         row = cur.fetchone()
         if row and row[0]:
             vec = row[0]
-            # pgvector 回傳的是 list 或 string
-            dims = len(vec) if isinstance(vec, (list, tuple)) else len(vec.strip("[]").split(","))
+            dims = len(vec) if isinstance(vec, (list, tuple)) else len(str(vec).strip("[]").split(","))
             print(f"\n向量維度: {dims}")
 
+        print("\n向量資料庫驗證通過。")
         return True
+
     except Exception as e:
         print(f"驗證失敗: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         conn.close()
+
 
 if __name__ == "__main__":
     verify_embeddings()

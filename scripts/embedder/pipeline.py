@@ -1,10 +1,24 @@
-#!/usr/bin/env python3
 """
-Chunking + Embedding 流水線。
+pipeline.py — Chunking + Embedding 流水線（v2）
+
+處理新格式的資料：
+    school_info.json = { "https://url1": "純文字1", "https://url2": "純文字2", ... }
+
+流程：
+    1. 讀取 school_info.json（或 data/ 目錄下所有 .json）
+    2. 對每個 URL 推斷學校（school_id）與頁面類型（page_type）
+    3. 寫入 universities 和 web_pages 表
+    4. 依頁面類型切片（chunk_text）
+    5. 向量化（embed_texts）
+    6. 寫入 document_chunks 表
 """
+
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 # 讓 scripts 目錄在 path 中
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -15,13 +29,135 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from db.connection import get_connection
-from embedder.chunker import chunk_text
-from embedder.store import upsert_chunks
+from embedder.chunker import chunk_text, infer_page_type
 from embedder.vectorize import embed_texts
 
 
+# ── 學校識別對照表 ─────────────────────────────────────────────
+# 根據 URL domain 自動對應學校資訊
+SCHOOL_MAP: dict[str, dict] = {
+    "cmu.edu": {
+        "school_id": "cmu",
+        "name": "Carnegie Mellon University",
+    },
+    "caltech.edu": {
+        "school_id": "caltech",
+        "name": "California Institute of Technology",
+    },
+    # 未來新增學校只要在此新增一列即可
+    # "stanford.edu": {"school_id": "stanford", "name": "Stanford University"},
+}
+
+
+def identify_school(url: str) -> dict | None:
+    """
+    從 URL 的 domain 找出對應學校資訊。
+    回傳 {'school_id': ..., 'name': ..., 'domain': ...}，若無法識別則回傳 None。
+    """
+    try:
+        hostname = urlparse(url).hostname or ""
+    except Exception:
+        return None
+
+    for domain, info in SCHOOL_MAP.items():
+        if domain in hostname:
+            return {**info, "domain": hostname}
+    return None
+
+
+# ── DB 操作 ──────────────────────────────────────────────────
+
+def upsert_university(conn, school_id: str, name: str, domain: str) -> int:
+    """寫入或更新 universities 表，回傳 university.id。"""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO universities (school_id, name, domain)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (school_id) DO UPDATE SET
+                name   = EXCLUDED.name,
+                domain = EXCLUDED.domain
+            RETURNING id;
+            """,
+            (school_id, name, domain),
+        )
+        return cur.fetchone()[0]
+
+
+def upsert_web_page(
+    conn,
+    university_id: int,
+    url: str,
+    page_type: str,
+    raw_text: str,
+) -> int:
+    """寫入或更新 web_pages 表，回傳 page.id。"""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO web_pages (university_id, url, page_type, raw_text, char_count)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (url) DO UPDATE SET
+                university_id = EXCLUDED.university_id,
+                page_type     = EXCLUDED.page_type,
+                raw_text      = EXCLUDED.raw_text,
+                char_count    = EXCLUDED.char_count
+            RETURNING id;
+            """,
+            (university_id, url, page_type, raw_text, len(raw_text)),
+        )
+        return cur.fetchone()[0]
+
+
+def upsert_chunks(
+    conn,
+    university_id: int,
+    page_id: int,
+    school_id: str,
+    source_url: str,
+    page_type: str,
+    chunks: list[str],
+    embeddings: list[list[float]],
+) -> int:
+    """刪除舊 chunks 並重新寫入，回傳寫入筆數。"""
+    if not chunks:
+        return 0
+
+    with conn.cursor() as cur:
+        # 先清除同一 page_id 的舊 chunk
+        cur.execute("DELETE FROM document_chunks WHERE page_id = %s", (page_id,))
+
+        meta_base = {
+            "school_id":  school_id,
+            "page_type":  page_type,
+            "source_url": source_url,
+        }
+        meta_json = json.dumps(meta_base, ensure_ascii=False)
+
+        for idx, (text, emb) in enumerate(zip(chunks, embeddings)):
+            cur.execute(
+                """
+                INSERT INTO document_chunks
+                    (university_id, page_id, school_id, source_url, page_type,
+                     chunk_index, chunk_text, embedding, metadata)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s::jsonb)
+                ON CONFLICT (page_id, chunk_index) DO UPDATE SET
+                    chunk_text    = EXCLUDED.chunk_text,
+                    embedding     = EXCLUDED.embedding,
+                    metadata      = EXCLUDED.metadata;
+                """,
+                (
+                    university_id, page_id, school_id, source_url, page_type,
+                    idx, text, str(emb), meta_json,
+                ),
+            )
+    return len(chunks)
+
+
+# ── 主流水線 ─────────────────────────────────────────────────
+
 def run_pipeline(data_dirname: str = "data") -> bool:
-    """讀取所有 JSON，切片 → 向量化 → 寫入 DB。"""
+    """讀取 school_info.json → 切片 → 向量化 → 寫入 DB。"""
     data_dir = ROOT_DIR / data_dirname
     if not data_dir.is_dir():
         print(f"找不到目錄 {data_dir}")
@@ -37,54 +173,94 @@ def run_pipeline(data_dirname: str = "data") -> bool:
         print("無法連線至資料庫，請確認 .env 中的 DATABASE_URL。")
         return False
 
+    total_pages = 0
     total_chunks = 0
+    skipped = 0
+
     try:
         for path in json_files:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            school_id = data.get("school_id", path.stem)
-            description = data.get("description_for_vector_db", "")
+            print(f"\n讀取檔案：{path.name}")
+            data: dict[str, str] = json.loads(path.read_text(encoding="utf-8"))
 
-            if not description.strip():
-                print(f"  [{school_id}] 無 description_for_vector_db，跳過。")
+            if not isinstance(data, dict):
+                print(f"{path.name} 格式不符（預期為 dict），跳過。")
                 continue
 
-            # 組裝結構化 metadata
-            req = data.get("requirements", {})
-            deadlines = data.get("deadlines", {})
-            meta = {
-                "university":             data.get("university"),
-                "school_id":              school_id,
-                "toefl_min":              req.get("toefl", {}).get("min_total"),
-                "toefl_required":         req.get("toefl", {}).get("is_required"),
-                "ielts_min":              req.get("ielts", {}).get("min_total"),
-                "ielts_required":         req.get("ielts", {}).get("is_required"),
-                "minimum_gpa":            req.get("minimum_gpa"),
-                "recommendation_letters": req.get("recommendation_letters"),
-                "gre_status":             req.get("gre", {}).get("status"),
-                "fall_deadline":          deadlines.get("fall_intake"),
-                "spring_deadline":        deadlines.get("spring_intake"),
-                "interview_required":     req.get("interview_required"),
-            }
+            # 追蹤同一檔案裡各學校的 university_id
+            school_university_ids: dict[str, int] = {}
 
-            # 1. Chunking
-            chunks = chunk_text(description)
-            print(f"  [{school_id}] 切成 {len(chunks)} 個 chunk")
+            for url, raw_text in data.items():
+                if not isinstance(url, str) or not isinstance(raw_text, str):
+                    skipped += 1
+                    continue
 
-            # 2. Embedding
-            print(f"  [{school_id}] 向量化中...")
-            embeddings = embed_texts(chunks)
+                raw_text = raw_text.strip()
+                if len(raw_text) < 50:
+                    print(f"跳過（文字過短）：{url[:80]}")
+                    skipped += 1
+                    continue
 
-            # 3. 寫入 DB
-            n = upsert_chunks(conn, school_id, chunks, embeddings, meta)
-            total_chunks += n
-            print(f"  [{school_id}] ✓ 已寫入 {n} 筆 chunk")
+                # 識別學校
+                school_info = identify_school(url)
+                if not school_info:
+                    print(f"無法識別學校（未知 domain），跳過：{url[:80]}")
+                    skipped += 1
+                    continue
 
-        print(f"\n完成！共處理 {total_chunks} 筆 chunk。")
+                school_id = school_info["school_id"]
+                name      = school_info["name"]
+                domain    = school_info["domain"]
+
+                # 寫入 universities（若尚未寫入）
+                if school_id not in school_university_ids:
+                    university_id = upsert_university(conn, school_id, name, domain)
+                    school_university_ids[school_id] = university_id
+                    conn.commit()
+                else:
+                    university_id = school_university_ids[school_id]
+
+                # 推斷頁面類型
+                page_type = infer_page_type(url)
+
+                # 寫入 web_pages
+                page_id = upsert_web_page(conn, university_id, url, page_type, raw_text)
+                conn.commit()
+                total_pages += 1
+
+                # 切片
+                chunks = chunk_text(raw_text, page_type=page_type)
+                if not chunks:
+                    print(f"切片結果為空：{url[:80]}")
+                    skipped += 1
+                    continue
+
+                print(f"  [{school_id}][{page_type}] {url[-60:]} → {len(chunks)} chunks")
+
+                # 向量化
+                embeddings = embed_texts(chunks)
+
+                # 寫入 document_chunks
+                n = upsert_chunks(
+                    conn,
+                    university_id=university_id,
+                    page_id=page_id,
+                    school_id=school_id,
+                    source_url=url,
+                    page_type=page_type,
+                    chunks=chunks,
+                    embeddings=embeddings,
+                )
+                conn.commit()
+                total_chunks += n
+
+        print(f"\n完成！共處理 {total_pages} 頁、{total_chunks} 個 chunk，跳過 {skipped} 筆。")
         return True
 
     except Exception as e:
         conn.rollback()
-        print(f"Pipeline 失敗: {e}")
+        print(f"\nPipeline 失敗: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     finally:
         conn.close()

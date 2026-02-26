@@ -1,4 +1,13 @@
-"""資料庫操作集合（給 scripts/run.py 呼叫）。"""
+"""
+ops.py — 資料庫操作集合（v2）
+
+配合新的資料庫 schema：
+  - universities  (school_id, name, domain)
+  - web_pages     (university_id, url, page_type, raw_text)
+  - document_chunks (page_id, school_id, source_url, chunk_text, embedding, metadata)
+
+給 scripts/run.py 呼叫的指令集。
+"""
 
 import json
 from datetime import datetime
@@ -8,14 +17,7 @@ import psycopg2
 from .connection import DATABASE_URL, ROOT, get_connection
 
 
-def _parse_date(date_str):
-    if not date_str or date_str == "Not Available":
-        return None
-    try:
-        return datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        return None
-
+# ── 工具函式 ──────────────────────────────────────────────────
 
 def _escape_sql(s):
     if s is None:
@@ -23,10 +25,12 @@ def _escape_sql(s):
     if isinstance(s, bool):
         return "TRUE" if s else "FALSE"
     if isinstance(s, (int, float)):
-        return str(s) if s is not None else "NULL"
+        return str(s)
     s = str(s).replace("\\", "\\\\").replace("'", "''")
     return f"'{s}'"
 
+
+# ── setup_db ─────────────────────────────────────────────────
 
 def setup_db():
     """檢查連線並在需要時建立 study_abroad 資料庫。"""
@@ -55,14 +59,23 @@ def setup_db():
         return False
 
 
+# ── import_json ──────────────────────────────────────────────
+
 def import_json(data_dirname: str = "data"):
-    """依 db/init_db.sql 建表，並將 data_dirname/*.json 匯入。"""
+    """
+    依 db/init_db.sql 建表，並啟動 embedder/pipeline.py 的 run_pipeline。
+    
+    新格式的 JSON 匯入邏輯完全由 pipeline.py 處理，
+    此函式負責：
+      1. 建立/重置資料表（執行 init_db.sql）
+      2. 呼叫 pipeline.run_pipeline()
+    """
     conn = get_connection()
     if not conn:
         print("請在 .env 設定 DATABASE_URL。")
         return False
     try:
-        # 建表
+        # 1. 建表
         sql_path = ROOT / "db" / "init_db.sql"
         if not sql_path.is_file():
             print(f"找不到 {sql_path}")
@@ -70,98 +83,27 @@ def import_json(data_dirname: str = "data"):
         with conn.cursor() as cur:
             cur.execute(sql_path.read_text(encoding="utf-8"))
         conn.commit()
-        print("已依 init_db.sql 建立/重置資料表。")
-
-        # 匯入 JSON
-        data_dir = ROOT / data_dirname
-        if not data_dir.is_dir():
-            print(f"找不到目錄 {data_dir}")
-            return False
-        json_files = sorted(data_dir.glob("*.json"))
-        if not json_files:
-            print(f"目錄 {data_dir} 下沒有 .json 檔")
-            return False
-
-        for path in json_files:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO universities (school_id, university, program, official_link, description)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (school_id) DO UPDATE SET
-                        university = EXCLUDED.university,
-                        program = EXCLUDED.program,
-                        official_link = EXCLUDED.official_link,
-                        description = EXCLUDED.description
-                    RETURNING id;
-                    """,
-                    (
-                        data["school_id"],
-                        data["university"],
-                        data["program"],
-                        data.get("official_link"),
-                        data.get("description_for_vector_db"),
-                    ),
-                )
-                university_id = cur.fetchone()[0]
-
-                req = data.get("requirements", {})
-                toefl = req.get("toefl", {})
-                ielts = req.get("ielts", {})
-                gre = req.get("gre", {})
-                cur.execute("DELETE FROM requirements WHERE university_id = %s", (university_id,))
-                cur.execute(
-                    """
-                    INSERT INTO requirements (
-                        university_id, toefl_min_total, toefl_required, toefl_notes,
-                        ielts_min_total, ielts_required, gre_status, gre_notes,
-                        minimum_gpa, recommendation_letters, interview_required
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                    """,
-                    (
-                        university_id,
-                        toefl.get("min_total"),
-                        toefl.get("is_required", False),
-                        toefl.get("notes"),
-                        ielts.get("min_total"),
-                        ielts.get("is_required", False),
-                        gre.get("status"),
-                        gre.get("notes"),
-                        req.get("minimum_gpa"),
-                        req.get("recommendation_letters"),
-                        str(req.get("interview_required", False)),
-                    ),
-                )
-
-                deadlines = data.get("deadlines", {})
-                cur.execute("DELETE FROM deadlines WHERE university_id = %s", (university_id,))
-                cur.execute(
-                    """
-                    INSERT INTO deadlines (university_id, fall_intake, spring_intake)
-                    VALUES (%s, %s, %s);
-                    """,
-                    (
-                        university_id,
-                        _parse_date(deadlines.get("fall_intake")),
-                        deadlines.get("spring_intake"),
-                    ),
-                )
-            conn.commit()
-            print(f"  已匯入 {data['school_id']} ({path.name})")
-
         conn.close()
-        print("匯入完成。")
-        return True
+        print("已依 init_db.sql 建立/重置資料表。")
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"匯入失敗: {e}")
+        print(f"建表失敗: {e}")
         return False
 
+    # 2. 執行 pipeline（切片 + 向量化 + 寫入）
+    import sys
+    if str(ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(ROOT / "scripts"))
+
+    from embedder.pipeline import run_pipeline
+    return run_pipeline(data_dirname)
+
+
+# ── verify ───────────────────────────────────────────────────
 
 def verify():
-    """檢查資料是否已寫入資料庫。"""
+    """檢查資料是否已寫入資料庫（v2 schema）。"""
     if not DATABASE_URL:
         print("錯誤: 未設定 DATABASE_URL（.env）。")
         return False
@@ -170,16 +112,38 @@ def verify():
         if not conn:
             return False
         with conn.cursor() as cur:
+            # universities
             cur.execute("SELECT COUNT(*) FROM universities")
-            count = cur.fetchone()[0]
-            print(f"資料庫中的學校數: {count}")
-            cur.execute("SELECT school_id, university, program FROM universities ORDER BY id")
-            for school_id, name, program in cur.fetchall():
-                print(f"  - {school_id}: {name} | {program}")
-            cur.execute("SELECT COUNT(*) FROM requirements")
-            print(f"requirements 筆數: {cur.fetchone()[0]}")
-            cur.execute("SELECT COUNT(*) FROM deadlines")
-            print(f"deadlines 筆數: {cur.fetchone()[0]}")
+            print(f"\nuniversities 筆數: {cur.fetchone()[0]}")
+            cur.execute("SELECT school_id, name, domain FROM universities ORDER BY id")
+            for sid, name, domain in cur.fetchall():
+                print(f"   - {sid}: {name} ({domain})")
+
+            # web_pages
+            cur.execute("SELECT COUNT(*) FROM web_pages")
+            print(f"\nweb_pages 筆數: {cur.fetchone()[0]}")
+            cur.execute("""
+                SELECT u.school_id, wp.page_type, COUNT(*) 
+                FROM web_pages wp
+                JOIN universities u ON wp.university_id = u.id
+                GROUP BY u.school_id, wp.page_type
+                ORDER BY u.school_id, wp.page_type
+            """)
+            for sid, ptype, cnt in cur.fetchall():
+                print(f"   [{sid}][{ptype}] {cnt} 頁")
+
+            # document_chunks
+            cur.execute("SELECT COUNT(*) FROM document_chunks")
+            print(f"\ndocument_chunks 筆數: {cur.fetchone()[0]}")
+            cur.execute("""
+                SELECT school_id, page_type, COUNT(*)
+                FROM document_chunks
+                GROUP BY school_id, page_type
+                ORDER BY school_id, page_type
+            """)
+            for sid, ptype, cnt in cur.fetchall():
+                print(f"   [{sid}][{ptype}] {cnt} chunks")
+
         conn.close()
         print("\n驗證通過：資料已存在於資料庫。")
         return True
@@ -192,8 +156,10 @@ def verify():
         return False
 
 
+# ── export_sql ───────────────────────────────────────────────
+
 def export_sql():
-    """將資料庫內容匯出成 db/exported_data.sql。"""
+    """將 universities 與 web_pages 摘要匯出成 db/exported_data.sql。"""
     if not DATABASE_URL:
         print("錯誤: 未設定 DATABASE_URL（.env）。")
         return False
@@ -204,101 +170,52 @@ def export_sql():
             return False
         cur = conn.cursor()
         lines = [
-            "-- 從資料庫匯出的資料（寫入 SQL 的內容）",
+            "-- 從資料庫匯出的資料（v2 schema）",
             f"-- 匯出時間: {datetime.now().isoformat()}",
-            "-- 僅供檢視；若要還原請先執行 db/init_db.sql 再依序執行下列 INSERT。",
             "",
         ]
 
-        cur.execute(
-            "SELECT id, school_id, university, program, official_link, description, created_at FROM universities ORDER BY id"
-        )
+        # universities
+        cur.execute("SELECT id, school_id, name, domain, created_at FROM universities ORDER BY id")
         rows = cur.fetchall()
         if rows:
             lines.append("-- ========== universities ==========")
-            for r in rows:
-                id_, school_id, university, program, official_link, description, created_at = r
+            for id_, sid, name, domain, created_at in rows:
                 ts = f"'{created_at}'" if created_at else "NULL"
                 lines.append(
-                    f"INSERT INTO universities (id, school_id, university, program, official_link, description, created_at) VALUES "
-                    f"({id_}, {_escape_sql(school_id)}, {_escape_sql(university)}, {_escape_sql(program)}, {_escape_sql(official_link)}, {_escape_sql(description)}, {ts});"
+                    f"INSERT INTO universities (id, school_id, name, domain, created_at) VALUES "
+                    f"({id_}, {_escape_sql(sid)}, {_escape_sql(name)}, {_escape_sql(domain)}, {ts});"
                 )
-            lines.append("")
-            max_id = max(r[0] for r in rows)
-            lines.append(f"SELECT setval(pg_get_serial_sequence('universities', 'id'), {max_id});")
-            lines.append("")
-        else:
-            lines.append("-- (無 universities 資料)")
+            lines.append(f"SELECT setval(pg_get_serial_sequence('universities', 'id'), {max(r[0] for r in rows)});")
             lines.append("")
 
-        cur.execute(
-            """SELECT id, university_id, toefl_min_total, toefl_required, toefl_notes,
-            ielts_min_total, ielts_required, ielts_notes, gre_status, gre_notes,
-            minimum_gpa, recommendation_letters, interview_required FROM requirements ORDER BY id"""
-        )
+        # web_pages（只匯出 metadata，不含 raw_text 以節省空間）
+        cur.execute("""
+            SELECT id, university_id, url, page_type, char_count, created_at
+            FROM web_pages ORDER BY id
+        """)
         rows = cur.fetchall()
         if rows:
-            lines.append("-- ========== requirements ==========")
-            for r in rows:
-                (
-                    id_,
-                    university_id,
-                    toefl_min,
-                    toefl_req,
-                    toefl_notes,
-                    ielts_min,
-                    ielts_req,
-                    ielts_notes,
-                    gre_status,
-                    gre_notes,
-                    gpa,
-                    rec_letters,
-                    interview,
-                ) = r
-                vals = [
-                    str(id_),
-                    str(university_id),
-                    str(toefl_min) if toefl_min is not None else "NULL",
-                    "TRUE" if toefl_req else "FALSE",
-                    _escape_sql(toefl_notes),
-                    str(ielts_min) if ielts_min is not None else "NULL",
-                    "TRUE" if ielts_req else "FALSE",
-                    _escape_sql(ielts_notes),
-                    _escape_sql(gre_status),
-                    _escape_sql(gre_notes),
-                    str(gpa) if gpa is not None else "NULL",
-                    str(rec_letters) if rec_letters is not None else "NULL",
-                    _escape_sql(interview),
-                ]
+            lines.append("-- ========== web_pages (metadata only, raw_text excluded) ==========")
+            for id_, uid, url, ptype, char_cnt, created_at in rows:
+                ts = f"'{created_at}'" if created_at else "NULL"
                 lines.append(
-                    "INSERT INTO requirements (id, university_id, toefl_min_total, toefl_required, toefl_notes, "
-                    "ielts_min_total, ielts_required, ielts_notes, gre_status, gre_notes, "
-                    "minimum_gpa, recommendation_letters, interview_required) VALUES (" + ", ".join(vals) + ");"
+                    f"-- page_id={id_}, university_id={uid}, page_type={_escape_sql(ptype)}, "
+                    f"chars={char_cnt}: {_escape_sql(url)}"
                 )
-            lines.append("")
-            max_id = max(r[0] for r in rows)
-            lines.append(f"SELECT setval(pg_get_serial_sequence('requirements', 'id'), {max_id});")
-            lines.append("")
-        else:
-            lines.append("-- (無 requirements 資料)")
             lines.append("")
 
-        cur.execute("SELECT id, university_id, fall_intake, spring_intake FROM deadlines ORDER BY id")
+        # document_chunks 統計
+        cur.execute("""
+            SELECT school_id, page_type, COUNT(*) as cnt
+            FROM document_chunks
+            GROUP BY school_id, page_type
+            ORDER BY school_id, page_type
+        """)
         rows = cur.fetchall()
-        if rows:
-            lines.append("-- ========== deadlines ==========")
-            for r in rows:
-                id_, university_id, fall_intake, spring_intake = r
-                fall = f"'{fall_intake}'" if fall_intake else "NULL"
-                lines.append(
-                    f"INSERT INTO deadlines (id, university_id, fall_intake, spring_intake) VALUES "
-                    f"({id_}, {university_id}, {fall}, {_escape_sql(spring_intake)});"
-                )
-            lines.append("")
-            max_id = max(r[0] for r in rows)
-            lines.append(f"SELECT setval(pg_get_serial_sequence('deadlines', 'id'), {max_id});")
-        else:
-            lines.append("-- (無 deadlines 資料)")
+        lines.append("-- ========== document_chunks 統計 ==========")
+        for sid, ptype, cnt in rows:
+            lines.append(f"-- [{sid}][{ptype}] {cnt} chunks")
 
         cur.close()
         conn.close()
@@ -308,4 +225,3 @@ def export_sql():
     except Exception as e:
         print(f"匯出失敗: {e}")
         return False
-

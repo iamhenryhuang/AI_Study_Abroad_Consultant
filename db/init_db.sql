@@ -1,67 +1,70 @@
--- Create tables for Study Abroad Consultant
+-- ============================================================
+-- Study Abroad Consultant — Database Schema (v2)
+-- 資料格式: school_info.json = { "url": "純文字", ... }
+-- 學校透過 URL domain 自動識別
+-- ============================================================
+
 CREATE EXTENSION IF NOT EXISTS vector;
-DROP TABLE IF EXISTS document_chunks;
-DROP TABLE IF EXISTS deadlines;
-DROP TABLE IF EXISTS requirements;
-DROP TABLE IF EXISTS universities;
 
--- 1. Universities Table
-CREATE TABLE IF NOT EXISTS universities (
-    id SERIAL PRIMARY KEY,
-    school_id VARCHAR(100) UNIQUE NOT NULL,
-    university VARCHAR(255) NOT NULL,
-    program VARCHAR(255) NOT NULL,
-    official_link TEXT,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+-- 先清除舊表（順序很重要，先刪有外鍵的子表）
+DROP TABLE IF EXISTS document_chunks CASCADE;
+DROP TABLE IF EXISTS web_pages CASCADE;
+DROP TABLE IF EXISTS universities CASCADE;
+
+-- ============================================================
+-- 1. universities — 學校主表（從 URL domain 推斷）
+-- ============================================================
+CREATE TABLE universities (
+    id          SERIAL PRIMARY KEY,
+    school_id   VARCHAR(100) UNIQUE NOT NULL,   -- e.g. 'cmu', 'caltech'
+    name        VARCHAR(255) NOT NULL,           -- e.g. 'Carnegie Mellon University'
+    domain      VARCHAR(255),                    -- e.g. 'cmu.edu'
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Requirements Table
-CREATE TABLE IF NOT EXISTS requirements (
-    id SERIAL PRIMARY KEY,
-    university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
-    toefl_min_total INTEGER,
-    toefl_required BOOLEAN DEFAULT FALSE,
-    toefl_notes TEXT,
-    ielts_min_total DECIMAL(3,1),
-    ielts_required BOOLEAN DEFAULT FALSE,
-    ielts_notes TEXT,
-    gre_status VARCHAR(50),
-    gre_notes TEXT,
-    minimum_gpa DECIMAL(3,2),
-    recommendation_letters INTEGER,
-    interview_required VARCHAR(100) DEFAULT 'false'
-);
-
--- 3. Deadlines Table
-CREATE TABLE IF NOT EXISTS deadlines (
-    id SERIAL PRIMARY KEY,
-    university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
-    fall_intake DATE,
-    spring_intake VARCHAR(100) -- Using VARCHAR as it might be "Not Available"
-);
-
--- 4. Document Chunks Table (for RAG / vector search)
-CREATE TABLE IF NOT EXISTS document_chunks (
+-- ============================================================
+-- 2. web_pages — 每個爬取的 URL 一筆（帶原始文字）
+-- ============================================================
+CREATE TABLE web_pages (
     id            SERIAL PRIMARY KEY,
-    school_id     VARCHAR(100) NOT NULL,
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
-    source        VARCHAR(50) DEFAULT 'official', -- 'official' or 'reddit'
-    chunk_index   INTEGER NOT NULL,
-    chunk_text    TEXT NOT NULL,
-    embedding     vector(1024),
-    -- 結構化 metadata：存入數字/日期欄位，供 hybrid query WHERE 過濾
-    metadata      JSONB,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (school_id, source, chunk_index)
+    url           TEXT UNIQUE NOT NULL,          -- 原始 URL
+    page_type     VARCHAR(100),                  -- 推斷的頁面類型 e.g. 'admissions', 'faq', 'checklist', 'general'
+    raw_text      TEXT NOT NULL,                 -- 爬到的純文字
+    char_count    INTEGER,                       -- 文字長度（方便 debug）
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- GIN index：加速 metadata JSONB 欄位的條件查詢
-CREATE INDEX IF NOT EXISTS idx_chunks_metadata
+CREATE INDEX idx_web_pages_university ON web_pages(university_id);
+CREATE INDEX idx_web_pages_page_type  ON web_pages(page_type);
+
+-- ============================================================
+-- 3. document_chunks — 向量檢索主表（每個 chunk 一筆）
+-- ============================================================
+CREATE TABLE document_chunks (
+    id            SERIAL PRIMARY KEY,
+    university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+    page_id       INTEGER REFERENCES web_pages(id) ON DELETE CASCADE,
+    school_id     VARCHAR(100) NOT NULL,         -- 冗餘，加速過濾
+    source_url    TEXT NOT NULL,                 -- 直接記錄原始 URL，方便回答時引用
+    page_type     VARCHAR(100),                  -- 頁面類型，供 metadata filter 用
+    chunk_index   INTEGER NOT NULL,              -- 同一 page_id 內的序號
+    chunk_text    TEXT NOT NULL,
+    embedding     vector(1024),                  -- BAAI/bge-m3 向量維度
+    metadata      JSONB,                         -- 彈性擴充欄位（page_type, url, school_id 等）
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (page_id, chunk_index)
+);
+
+-- GIN index：加速 metadata JSONB 欄位查詢
+CREATE INDEX idx_chunks_metadata
     ON document_chunks USING GIN (metadata);
 
 -- HNSW index：加速向量相似度搜尋 (ANN)
--- m: 每個節點的最大連接數 (預設 16), ef_construction: 建立索引時的搜尋範圍 (預設 64)
-CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+CREATE INDEX idx_chunks_embedding
     ON document_chunks USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
+
+-- 加速 school_id/page_type 條件過濾
+CREATE INDEX idx_chunks_school   ON document_chunks(school_id);
+CREATE INDEX idx_chunks_pagetype ON document_chunks(page_type);

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-資料庫腳本統一入口。請在專案根目錄執行：
+資料庫腳本統一入口（v2）。請在專案根目錄執行：
 
-  python scripts/run.py setup    # 檢查連線，必要時建立 study_abroad 資料庫
-  python scripts/run.py import   # 建表並匯入 data/*.json
-  python scripts/run.py verify   # 檢查資料是否已寫入
-  python scripts/run.py export   # 匯出至 db/exported_data.sql
-  python scripts/run.py init-all # 一次完成 setup + import
+  python scripts/run.py setup      # 檢查連線，必要時建立 study_abroad 資料庫
+  python scripts/run.py import     # 建表 + 切片 + 向量化並匯入 data/*.json
+  python scripts/run.py verify-db  # 檢查 SQL 資料是否已寫入
+  python scripts/run.py verify-vdb # 檢查向量資料庫狀態（chunk 數量、向量維度）
+  python scripts/run.py export     # 匯出摘要至 db/exported_data.sql
+  python scripts/run.py search [query] [--school cmu|caltech]
+  python scripts/run.py rag [query] [--eval] [--mq] [--school cmu|caltech]
+  python scripts/run.py init-all   # 一次完成 setup + import
 """
 import os
 import sys
@@ -34,22 +37,20 @@ if str(SCRIPTS) not in sys.path:
 
 from db.ops import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
-from embedder.reddit_pipeline import run_reddit_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
 from retriever.rag_pipeline import run_rag_pipeline
 
 COMMANDS = {
-    "setup": ("檢查連線並建立資料庫", setup_db),
-    "import": ("建表並匯入 data/*.json", import_json),
-    "verify-db": ("檢查 SQL 資料是否已寫入", verify),
-    "export": ("匯出至 db/exported_data.sql", export_sql),
-    "embed": ("切片 + 向量化並寫入 document_chunks", run_pipeline),
-    "embed-reddit": ("處理 reddit_data 下的 JSON 並寫入向量庫", run_reddit_pipeline),
-    "verify-vdb": ("檢查向量資料庫 (Vector DB) 狀態", verify_embeddings),
-    "search": ("執行 RAG 檢索測試", lambda: run_search("UIUC MSCS requirements")),
-    "rag": ("執行完整 RAG 回答 (檢索+重排+LLM)", lambda: run_rag_pipeline("CMU MSCS requirement")),
-    "init-all": ("建立資料庫並匯入 JSON（setup + import）", lambda: (setup_db() and import_json())),
+    "setup":     ("檢查連線並建立資料庫",                   setup_db),
+    "import":    ("建表 + 切片 + 向量化並匯入 data/*.json",  import_json),
+    "verify-db": ("檢查 SQL 資料是否已寫入",                 verify),
+    "verify-vdb":("檢查向量資料庫狀態",                      verify_embeddings),
+    "export":    ("匯出摘要至 db/exported_data.sql",         export_sql),
+    "embed":     ("切片 + 向量化並寫入 document_chunks",     run_pipeline),
+    "search":    ("執行向量檢索測試 [query] [--school]",      None),  # 特殊處理
+    "rag":       ("執行完整 RAG 流程 [query] [--school]",    None),  # 特殊處理
+    "init-all":  ("一次完成 setup + import",                 lambda: (setup_db() and import_json())),
 }
 
 
@@ -60,35 +61,47 @@ def main():
         for cmd, (desc, _) in COMMANDS.items():
             print(f"  {cmd:<12}  {desc}")
         sys.exit(1)
-    
+
     cmd = sys.argv[1]
     _, runner = COMMANDS[cmd]
-    
-    # 對於 search 與 rag 指令，支援自定義 query
+
+    # search / rag 需要特殊處理（自訂 query 與旗標）
     if cmd in ["search", "rag"]:
-        if len(sys.argv) > 2:
-            query = " ".join(sys.argv[2:])
-        else:
-            # 如果沒帶參數，則進入互動模式
-            query = input(f"請輸入要{cmd}的問題: ").strip()
+        # 解析旗標
+        evaluate  = "--eval" in sys.argv
+        use_mq    = "--mq" in sys.argv or "--multi-query" in sys.argv
+        school_id = None
+        if "--school" in sys.argv:
+            idx = sys.argv.index("--school")
+            if idx + 1 < len(sys.argv):
+                school_id = sys.argv[idx + 1]
+
+        # 取出 query（排除旗標）
+        skip_keywords = {"--eval", "--mq", "--multi-query", "--school"}
+        args_clean = [
+            a for i, a in enumerate(sys.argv[2:])
+            if a not in skip_keywords and (i == 0 or sys.argv[i + 1] != "--school")
+        ]
+        query = " ".join(args_clean).strip()
+
+        if not query:
+            query = input(f"請輸入查詢問題: ").strip()
             if not query:
                 print("未輸入問題，停止執行。")
                 sys.exit(0)
-        
+
         if cmd == "search":
-            ok = run_search(query)
+            ok = run_search(query, school_id=school_id)
         else:
-            # 檢查是否有 --eval 或 --mq 參數
-            evaluate = "--eval" in sys.argv
-            use_mq = "--mq" in sys.argv or "--multi-query" in sys.argv
-            
-            # 清理 query 內容
-            query = query.replace("--eval", "").replace("--mq", "").replace("--multi-query", "").strip()
-            
-            ok = run_rag_pipeline(query, evaluate=evaluate, use_multi_query=use_mq)
+            ok = run_rag_pipeline(
+                query,
+                evaluate=evaluate,
+                use_multi_query=use_mq,
+                school_id=school_id,
+            )
     else:
         ok = runner()
-    
+
     sys.exit(0 if ok else 1)
 
 

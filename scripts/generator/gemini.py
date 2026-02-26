@@ -1,17 +1,23 @@
 """
-Gemini 模型生成模組：封裝與 Google Gemini 2.5 Flash 的互動。
+gemini.py — Gemini 2.5 Flash 回答生成模組（v2）
+
+System prompt 核心原則：
+  - 嚴格依賴提供的 context，不得自行腦補
+  - 若 context 不足以回答，明確說不知道並引導使用者查官網
+  - 輸出格式：繁體中文、純文字、無星號
 """
+
 import os
 from dotenv import load_dotenv
 from google import genai
 
-# 載入環境變數
 load_dotenv()
 
 _client = None
 
+
 def get_gemini_client():
-    """取得 Gemini GenAI Client"""
+    """取得 Gemini GenAI Client。"""
     global _client
     if _client is None:
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -20,95 +26,93 @@ def get_gemini_client():
         _client = genai.Client(api_key=api_key)
     return _client
 
-def generate_answer(query: str, context_docs: list[dict], model_name: str = "gemini-2.5-flash"):
-    """
-    根據檢索到的文件生成回答。
-    
-    Args:
-        query: 使用者問題
-        context_docs: 檢索並排序後的文件清單
-        model_name: 模型名稱
-    """
-    client = get_gemini_client()
-    
+
 def format_context_for_prompt(context_docs: list[dict]) -> str:
-    """將檢索到的原始文件列表格式化為 LLM 易讀的字串。"""
+    """
+    將檢索到的文件列表格式化為 LLM 易讀的字串（v2 schema）。
+
+    每筆 doc 包含：
+      - chunk_text     : 段落文字
+      - university_name: 學校全名
+      - school_id      : 學校識別碼
+      - page_type      : 頁面類型（admissions / faq / checklist…）
+      - source_url     : 原始頁面 URL
+      - metadata       : JSONB（school_id, page_type, source_url）
+    """
     formatted_docs = []
     for i, doc in enumerate(context_docs):
-        univ = doc.get('university', '未知大學')
-        prog = doc.get('program', '未知系所')
-        text = doc.get('chunk_text', '')
-        meta = doc.get('metadata', {})
-        
-        # 將 metadata 轉為可讀文字
-        meta_parts = []
-        if meta:
-            if meta.get('fall_deadline'): meta_parts.append(f"秋季截止日: {meta['fall_deadline']}")
-            if meta.get('spring_deadline'): meta_parts.append(f"春季截止日: {meta['spring_deadline']}")
-            if meta.get('minimum_gpa'): meta_parts.append(f"GPA 要求: {meta['minimum_gpa']}")
-            if meta.get('toefl_min'): 
-                req_str = " (必備)" if meta.get('toefl_required') else ""
-                meta_parts.append(f"TOEFL 要求: {meta['toefl_min']}{req_str}")
-            if meta.get('ielts_min'): 
-                req_str = " (必備)" if meta.get('ielts_required') else ""
-                meta_parts.append(f"IELTS 要求: {meta['ielts_min']}{req_str}")
-            if meta.get('gre_status'): meta_parts.append(f"GRE 狀態: {meta['gre_status']}")
-            if meta.get('recommendation_letters'): meta_parts.append(f"推薦信需求: {meta['recommendation_letters']} 封")
-            if meta.get('interview_required'): meta_parts.append(f"面試需求: {meta['interview_required']}")
-        
-        meta_text = " | ".join(meta_parts) if meta_parts else "無結構化資訊"
-        
+        univ     = doc.get("university_name", "未知學校")
+        sid      = doc.get("school_id", "")
+        ptype    = doc.get("page_type", "unknown")
+        url      = doc.get("source_url", "")
+        text     = doc.get("chunk_text", "").strip()
+
         doc_block = (
-            f"--- 來源 {i+1} ({univ} / {prog} / 來源: {doc.get('source', 'official')}) ---\n"
-            f"[結構化資訊] {meta_text}\n"
-            f"[詳細描述] {text}"
+            f"--- 來源 {i+1} [{univ} ({sid})] 頁面類型：{ptype} ---\n"
+            f"原始 URL：{url}\n"
+            f"{text}"
         )
         formatted_docs.append(doc_block)
 
     return "\n\n".join(formatted_docs)
 
-def generate_answer(query: str, context_docs: list[dict], model_name: str = "gemini-2.5-flash"):
+
+_SYSTEM_PROMPT = """你是一位北美 CS 研究所申請諮詢助理。你只能根據下方「參考資料」中的內容作答。
+
+核心規則（違反任何一條視為嚴重錯誤）：
+1. 嚴禁幻覺：不得憑空捏造任何數字、日期、政策或要求。若參考資料中找不到答案，必須明確說「我沒有找到相關資訊」，並請使用者前往官方網站查詢。
+2. 不確定就說不知道：若參考資料只有部分相關、不夠明確，或你有任何不確定，請直接告知「資料不足，建議前往官方網站確認」，並提供 source_url。
+3. 禁止補充自己的知識：即使你知道答案，也不得提供參考資料以外的資訊。只能說「我沒有依據，請查官網」。
+4. 格式規定：
+   - 語言：繁體中文
+   - 嚴禁 Markdown 表格
+   - 嚴禁星號（*）做列表或強調
+   - 使用純文字段落或簡單編號（1. 2. 3.）
+   - 直接切入重點，不要開場白或客套話
+5. 引用來源：回答中若有具體數據，請在句末標註（來源：[page_type] URL），讓使用者可以自行驗證。
+6. 找不到資訊的固定回應格式：
+   「根據目前取得的資料，我無法確認此問題的答案。建議您直接前往官方網站查詢：[相關 URL，若有的話]」
+"""
+
+
+def generate_answer(
+    query: str,
+    context_docs: list[dict],
+    model_name: str = "gemini-2.5-flash",
+) -> str | None:
     """
     根據檢索到的文件生成回答。
-    
+
     Args:
-        query: 使用者問題
-        context_docs: 檢索並排序後的文件清單
-        model_name: 模型名稱
+        query:        使用者問題
+        context_docs: 檢索並排序後的文件清單（v2 schema）
+        model_name:   模型名稱
+
+    Returns:
+        回答字串，或 None（API 呼叫失敗時）
     """
     client = get_gemini_client()
-    
-    # 組合 context，同時包含 chunk_text 與 結構化 metadata
+
     context_text = format_context_for_prompt(context_docs)
-    
-    prompt = f"""角色：北美 CS 申請專家，需結合官方數據與社群實戰經驗回答。
 
-規則：
-1. 內容至上：直接切入重點，嚴禁任何開場白、客套話或重複內容。
-2. 禁表格與特殊符號：嚴禁使用 Markdown 表格結構。嚴禁使用星號（*）作為列表或強調符號。
-3. 純文字整理：請使用純文字段落或簡單的編號（如 1. 2. 3.）進行資訊整理。
-4. 視覺清爽：僅在必要時區分段落，保持版面極簡，不要有過多的 Markdown 標記。
-5. 來源識別：區分官方來源與 Reddit 經驗，直接在文字中註明「官方：」或「社群：」。
-6. 語言：繁體中文。
+    prompt = f"""{_SYSTEM_PROMPT}
 
---- 參考資料 ---
+--- 參考資料（共 {len(context_docs)} 筆） ---
 {context_text}
 
 --- 使用者問題 ---
 {query}
 
-輸出要求：
-1. 按學校區分重點，使用簡單的文字描述。
-2. 錄取門檻與實戰案例合併在敘事中，直接說重點。
-3. 嚴禁出現任何星號（*）字符。
+--- 你的回答 ---
+（請嚴格遵守以上規則，若資料不足請直接說不知道並引導查官網）
 """
 
     try:
         response = client.models.generate_content(
             model=model_name,
-            contents=prompt
+            contents=prompt,
         )
-        # 額外清理：確保輸出中完全沒有星號
+        # 清除殘留星號
         clean_text = response.text.replace("*", "")
         return clean_text
     except Exception as e:
