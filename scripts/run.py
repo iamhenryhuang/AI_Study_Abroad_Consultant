@@ -9,6 +9,7 @@
   python scripts/run.py export     # 匯出摘要至 db/exported_data.sql
   python scripts/run.py search [query] [--school cmu|caltech]
   python scripts/run.py rag [query] [--mq] [--school cmu|caltech]
+  python scripts/run.py agent [query] [--max-steps N]   # Agentic RAG (ReAct Loop)
   python scripts/run.py init-all   # 一次完成 setup + import
 """
 import os
@@ -39,7 +40,7 @@ from db.ops import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
-from retriever.rag_pipeline import run_rag_pipeline
+from retriever.rag_pipeline import run_rag_pipeline, run_agent_pipeline
 
 COMMANDS = {
     "setup":     ("檢查連線並建立資料庫",                   setup_db),
@@ -50,6 +51,7 @@ COMMANDS = {
     "embed":     ("切片 + 向量化並寫入 document_chunks",     run_pipeline),
     "search":    ("執行向量檢索測試 [query] [--school]",      None),  # 特殊處理
     "rag":       ("執行完整 RAG 流程 [query] [--school]",    None),  # 特殊處理
+    "agent":     ("Agentic RAG ReAct Loop [query] [--max-steps N]", None),  # 特殊處理
     "init-all":  ("一次完成 setup + import",                 lambda: (setup_db() and import_json())),
 }
 
@@ -66,18 +68,26 @@ def main():
     _, runner = COMMANDS[cmd]
 
     # search / rag 需要特殊處理（自訂 query 與旗標）
-    if cmd in ["search", "rag"]:
+    if cmd in ["search", "rag", "agent"]:
         # 解析旗標
         evaluate  = False
         use_mq    = "--mq" in sys.argv or "--multi-query" in sys.argv
+        max_steps = 5
         school_id = None
+        if "--max-steps" in sys.argv:
+            idx = sys.argv.index("--max-steps")
+            if idx + 1 < len(sys.argv):
+                try:
+                    max_steps = int(sys.argv[idx + 1])
+                except ValueError:
+                    pass
         if "--school" in sys.argv:
             idx = sys.argv.index("--school")
             if idx + 1 < len(sys.argv):
                 school_id = sys.argv[idx + 1]
 
         # 取出 query（排除旗標）
-        skip_keywords = {"--mq", "--multi-query", "--school"}
+        skip_keywords = {"--mq", "--multi-query", "--school", "--max-steps"}
         args_clean = [
             a for i, a in enumerate(sys.argv[2:])
             if a not in skip_keywords and (i == 0 or sys.argv[i + 1] != "--school")
@@ -92,6 +102,8 @@ def main():
 
         if cmd == "search":
             ok = run_search(query, school_id=school_id)
+        elif cmd == "agent":
+            ok = run_agent_pipeline(query, max_steps=max_steps)
         else:
             ok = run_rag_pipeline(
                 query,

@@ -1,14 +1,23 @@
-"""向量化模組：使用本地 BAAI/bge-m3 模型（從 D:\\DforDownload 載入）。"""
+"""向量化模組：使用本地 BAAI/bge-m3 模型。
+
+模型路徑由 .env 中的 BGE_EMBED_MODEL_PATH 決定，
+預設為 D:\\DforDownload\\BAAI\\bge-m3。
+"""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
-# 模型放在 D:\DforDownload\BAAI\bge-m3
-_MODEL_PATH = Path(r"D:\DforDownload\BAAI\bge-m3")
+load_dotenv()
+
+# 從 .env 讀取路徑；若未設定則使用預設 D 槽路徑
+_MODEL_PATH = Path(
+    os.getenv("BGE_EMBED_MODEL_PATH", r"D:\DforDownload\BAAI\bge-m3")
+)
 
 _model: SentenceTransformer | None = None
 

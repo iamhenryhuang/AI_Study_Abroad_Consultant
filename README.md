@@ -34,7 +34,7 @@ scripts/
   run.py                ← unified entry point
   db/                   ← connection, setup, import/export
   embedder/             ← chunker, pipeline, vectorize, store, verifier
-  retriever/            ← search, reranker, multi_query, rag_pipeline
+  retriever/            ← search, reranker, multi_query, rag_pipeline, agent
   generator/            ← Gemini answer generation
 ```
 
@@ -64,6 +64,10 @@ python scripts/run.py search "Caltech PhD funding" --school caltech
 
 python scripts/run.py rag "What are CMU MSCS requirements?"
 python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
+
+# Agentic RAG (ReAct Loop — 自動决定搜尋次數與策略)
+python scripts/run.py agent "Compare GPA requirements and deadlines for Stanford, CMU and MIT"
+python scripts/run.py agent "What do admitted students say about the CMU MSCS interview?" --max-steps 6
 
 # Export SQL summary
 python scripts/run.py export
