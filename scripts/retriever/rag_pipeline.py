@@ -1,7 +1,7 @@
 """
 rag_pipeline.py — RAG 完整流程（v2）
 
-檢索 → 重排序 → 生成回答 → (可選) 評估
+檢索 → 重排序 → 生成回答
 
 v2 改動：
   - 回傳結果包含 source_url，讓 Gemini 可以在回答中引用網頁來源
@@ -20,13 +20,12 @@ if str(SCRIPTS_DIR) not in sys.path:
 from retriever.search import search_core
 from retriever.multi_query import search_with_multi_query
 from generator.gemini import generate_answer
-from evaluator.rag_evaluation import run_triad_evaluation
+
 
 
 def run_rag_pipeline(
     query: str,
     top_k: int = 7,
-    evaluate: bool = False,
     use_multi_query: bool = False,
     school_id: str | None = None,
 ) -> bool:
@@ -36,7 +35,6 @@ def run_rag_pipeline(
     Args:
         query:           使用者提出的問題。
         top_k:           檢索的數量。
-        evaluate:        是否啟用 RAG Triad 評估。
         use_multi_query: 是否使用 Multi-Query 擴展查詢。
         school_id:       限定搜尋的學校（e.g. 'cmu', 'caltech'），None 表示全部。
     """
@@ -71,13 +69,6 @@ def run_rag_pipeline(
         print("\n" + "=" * 30 + " Gemini 回答 " + "=" * 30)
         print(answer)
         print("=" * 73 + "\n")
-
-        # 3. 執行評估 (RAG Triad)
-        if evaluate:
-            from generator.gemini import format_context_for_prompt
-            formatted_contexts = [format_context_for_prompt([res]) for res in results]
-            run_triad_evaluation(query, formatted_contexts, answer)
-
         return True
     else:
         print("生成回答失敗。")
@@ -87,7 +78,6 @@ def run_rag_pipeline(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="執行 RAG 流程")
     parser.add_argument("query", nargs="?", help="使用者問題")
-    parser.add_argument("--eval", action="store_true", help="是否執行 RAG Triad 評估")
     parser.add_argument("--multi-query", action="store_true", help="是否啟用 Multi-Query")
     parser.add_argument("--school", type=str, default=None, help="限定學校 e.g. cmu, caltech")
     parser.add_argument("--top-k", type=int, default=7, help="檢索數量")
@@ -96,9 +86,6 @@ if __name__ == "__main__":
     q = args.query
     if not q:
         q = input("請輸入問題: ").strip()
-        if q.endswith("--eval"):
-            q = q.replace("--eval", "").strip()
-            args.eval = True
         if q.endswith("--mq"):
             q = q.replace("--mq", "").strip()
             args.multi_query = True
@@ -107,7 +94,6 @@ if __name__ == "__main__":
         run_rag_pipeline(
             q,
             top_k=args.top_k,
-            evaluate=args.eval,
             use_multi_query=args.multi_query,
             school_id=args.school,
         )

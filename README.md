@@ -35,7 +35,6 @@ scripts/
   db/                   ← connection, setup, import/export
   embedder/             ← chunker, pipeline, vectorize, store, verifier
   retriever/            ← search, reranker, multi_query, rag_pipeline
-  evaluator/            ← RAG Triad evaluation (Gemini as judge)
   generator/            ← Gemini answer generation
 ```
 
@@ -65,7 +64,6 @@ python scripts/run.py search "Caltech PhD funding" --school caltech
 
 python scripts/run.py rag "What are CMU MSCS requirements?"
 python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
-python scripts/run.py rag "Caltech GRE policy" --school caltech --eval
 
 # Export SQL summary
 python scripts/run.py export
@@ -73,11 +71,14 @@ python scripts/run.py export
 
 ---
 
-## Chunk Size by Page Type
+## Chunk Strategy by Page Type
 
-| URL contains | page_type | chunk_size |
-|---|---|---|
-| `faq` | faq | 1200 chars |
-| `checklist` / `requirements` | checklist | 600 chars |
-| `admissions` / `apply` | admissions | 800 chars |
-| anything else | general | 700 chars |
+Chunks are sized for **English text** (~5–6 chars/word). FAQ pages use a regex pre-pass to extract whole Q&A pairs before splitting.
+
+| URL contains | page_type | chunk_size | overlap |
+|---|---|---|---|
+| `faq` | faq | 2000 chars (Q&A pre-split) | 200 |
+| `checklist` / `requirements` | checklist | 1200 chars | 150 |
+| `admissions` / `apply` | admissions | 1600 chars | 200 |
+| `reddit.com` | reddit | 900 chars | 150 |
+| anything else | general | 1400 chars | 200 |

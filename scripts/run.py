@@ -8,7 +8,7 @@
   python scripts/run.py verify-vdb # 檢查向量資料庫狀態（chunk 數量、向量維度）
   python scripts/run.py export     # 匯出摘要至 db/exported_data.sql
   python scripts/run.py search [query] [--school cmu|caltech]
-  python scripts/run.py rag [query] [--eval] [--mq] [--school cmu|caltech]
+  python scripts/run.py rag [query] [--mq] [--school cmu|caltech]
   python scripts/run.py init-all   # 一次完成 setup + import
 """
 import os
@@ -68,7 +68,7 @@ def main():
     # search / rag 需要特殊處理（自訂 query 與旗標）
     if cmd in ["search", "rag"]:
         # 解析旗標
-        evaluate  = "--eval" in sys.argv
+        evaluate  = False
         use_mq    = "--mq" in sys.argv or "--multi-query" in sys.argv
         school_id = None
         if "--school" in sys.argv:
@@ -77,7 +77,7 @@ def main():
                 school_id = sys.argv[idx + 1]
 
         # 取出 query（排除旗標）
-        skip_keywords = {"--eval", "--mq", "--multi-query", "--school"}
+        skip_keywords = {"--mq", "--multi-query", "--school"}
         args_clean = [
             a for i, a in enumerate(sys.argv[2:])
             if a not in skip_keywords and (i == 0 or sys.argv[i + 1] != "--school")
@@ -95,7 +95,6 @@ def main():
         else:
             ok = run_rag_pipeline(
                 query,
-                evaluate=evaluate,
                 use_multi_query=use_mq,
                 school_id=school_id,
             )

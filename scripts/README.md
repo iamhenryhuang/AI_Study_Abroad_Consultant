@@ -14,7 +14,7 @@ scripts/
 │   └── ops.py              ← setup_db, import_json, verify, export_sql
 ├── embedder/
 │   ├── pipeline.py         ← main pipeline: reads {url:text} JSON → chunks → embeds → stores
-│   ├── chunker.py          ← smart chunking: chunk size adapts to page_type
+│   ├── chunker.py          ← smart chunking: chunk size + strategy adapts to page_type
 │   ├── vectorize.py        ← BAAI/bge-m3 embeddings (1024-dim)
 │   ├── store.py            ← upsert helper for document_chunks
 │   └── verifier.py         ← verify chunk counts, vector dims, source URLs
@@ -23,10 +23,8 @@ scripts/
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
 │   ├── multi_query.py      ← Multi-Query expansion via Gemini
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
-├── generator/
-│   └── gemini.py           ← Gemini 2.5 Flash answer generation
-└── evaluator/
-    └── rag_evaluation.py   ← RAG Triad evaluation (context relevance, faithfulness, answer relevance)
+└── generator/
+    └── gemini.py           ← Gemini 2.5 Flash answer generation
 ```
 
 ---
@@ -61,7 +59,7 @@ python scripts/run.py search "Caltech PhD funding" --school caltech
 # Full RAG: search → rerank → Gemini answer
 python scripts/run.py rag "What documents does CMU SCS require?"
 python scripts/run.py rag "Compare CMU and Caltech funding packages" --mq
-python scripts/run.py rag "Caltech GRE policy" --school caltech --eval
+python scripts/run.py rag "Stanford MS admission GPA" --school stanford
 ```
 
 **Flags:**
@@ -70,7 +68,6 @@ python scripts/run.py rag "Caltech GRE policy" --school caltech --eval
 |------|--------|
 | `--school cmu` | Filter retrieval to a single school (`cmu`, `caltech`, …) |
 | `--mq` | Enable Multi-Query expansion (Gemini generates 3 related queries) |
-| `--eval` | Run RAG Triad evaluation after generating the answer |
 
 ---
 
@@ -101,16 +98,19 @@ The school is inferred from the URL domain (primary) or filename (fallback) via 
 | `ucsd` | UC San Diego |
 | `uw` | University of Washington |
 
-### Chunk sizes by page type
+### Chunk strategy by page type
 
-`chunker.py` detects the page type from the URL path and picks an appropriate chunk size:
+`chunker.py` detects the page type from the URL path and applies an appropriate chunking strategy. All sizes are calibrated for **English text** (~5–6 chars/word, so 1400 chars ≈ 200–250 words).
 
-| URL path contains | page_type | chunk_size | overlap |
-|-------------------|-----------|-----------|---------|
-| `faq` | faq | 1200 | 120 |
-| `checklist` / `requirements` | checklist | 600 | 60 |
-| `admissions` / `apply` | admissions | 800 | 80 |
-| *(anything else)* | general | 700 | 70 |
+**FAQ pages** receive special treatment: a regex pre-pass splits the text at question-sentence boundaries (e.g. "Do...", "What...", "How...", "Can...") so that each Q&A pair is kept intact as a single chunk before any character-limit splitting.
+
+| URL path contains | page_type | chunk_size | overlap | Notes |
+|-------------------|-----------|-----------|---------|-|
+| `faq` | faq | 2000 | 200 | Q&A regex pre-split |
+| `checklist` / `requirements` | checklist | 1200 | 150 | |
+| `admissions` / `apply` | admissions | 1600 | 200 | |
+| `reddit.com` | reddit | 900 | 150 | Short conversational posts |
+| *(anything else)* | general | 1400 | 200 | |
 
 ### Database schema (v2)
 
