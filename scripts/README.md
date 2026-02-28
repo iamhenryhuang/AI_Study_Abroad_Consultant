@@ -23,6 +23,7 @@ scripts/
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
 │   ├── multi_query.py      ← Multi-Query expansion via Gemini
 │   ├── agent.py            ← Agentic RAG: Gemini Function Calling ReAct loop
+│   ├── sanity_check.py     ← pre-LLM validator: flags implausible values (GPA, TOEFL, GRE…)
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
 └── generator/
     └── gemini.py           ← Gemini 2.5 Flash answer generation
@@ -127,11 +128,31 @@ universities  →  web_pages  →  document_chunks
 
 ---
 
+## Sanity Check (Agentic RAG only)
+
+`sanity_check.py` runs automatically inside the Agent's tool executor. Before each search result is shown to the LLM, every chunk is scanned for numerically implausible values. Suspicious chunks are annotated with a ⚠️ header so the Agent knows to re-search or warn the user.
+
+| Rule | Trigger |
+|---|---|
+| `gpa_out_of_range` | GPA > 4.5 or == 0.0 (US 4.0/4.3 scale) |
+| `toefl_out_of_range` | TOEFL iBT > 120 |
+| `ielts_out_of_range` | IELTS > 9.0 |
+| `gre_out_of_range` | GRE value outside 130–340 range |
+| `tuition_suspiciously_high` | Dollar amount > $100,000 per entry |
+
+Agent response logic when a ⚠️ flag is detected:
+- **Strategy A** — Re-search with different query or `page_type='faq'` to cross-verify
+- **Strategy B** — Flag the value in the final answer: *「this figure appears implausible; please verify at [URL]」*
+- **Strategy C** — If all results are flagged, tell the user the database data may be unreliable
+
+---
+
 ## Requirements
 
 - PostgreSQL with `pgvector` extension enabled
-- Local model files:
-  - `BAAI/bge-m3` at `D:\DforDownload\BAAI\bge-m3` (or set to auto-download)
-  - `BAAI/bge-reranker-v2-m3` at `D:\DforDownload\BAAI\bge-reranker-v2-m3`
+- Local model files (paths set in `.env`):
+  - `BGE_EMBED_MODEL_PATH` — path to `BAAI/bge-m3` (default: `D:\DforDownload\BAAI\bge-m3`)
+  - `BGE_RERANKER_MODEL_PATH` — path to `BAAI/bge-reranker-v2-m3`
+  - Both will auto-download from HuggingFace if the local path does not exist
 - Python dependencies: `pip install -r requirements.txt`
-- `.env` with `DATABASE_URL` and `GOOGLE_API_KEY`
+- `.env` with `DATABASE_URL`, `GOOGLE_API_KEY`, `BGE_EMBED_MODEL_PATH`, `BGE_RERANKER_MODEL_PATH`

@@ -34,7 +34,7 @@ scripts/
   run.py                ← unified entry point
   db/                   ← connection, setup, import/export
   embedder/             ← chunker, pipeline, vectorize, store, verifier
-  retriever/            ← search, reranker, multi_query, rag_pipeline, agent
+  retriever/            ← search, reranker, multi_query, rag_pipeline, agent, sanity_check
   generator/            ← Gemini answer generation
 ```
 
@@ -42,7 +42,11 @@ scripts/
 
 ## Quick Start
 
-1. Copy `.env.example` → `.env`, fill in `DATABASE_URL` and `GOOGLE_API_KEY`
+1. Copy `.env.example` → `.env`, fill in the required fields:
+   - `DATABASE_URL` — PostgreSQL connection string
+   - `GOOGLE_API_KEY` — Gemini API key
+   - `BGE_EMBED_MODEL_PATH` — local path to `BAAI/bge-m3` (default: `D:\DforDownload\BAAI\bge-m3`)
+   - `BGE_RERANKER_MODEL_PATH` — local path to `BAAI/bge-reranker-v2-m3`
 2. `pip install -r requirements.txt`
 3. From the project root:
 
@@ -86,3 +90,19 @@ Chunks are sized for **English text** (~5–6 chars/word). FAQ pages use a regex
 | `admissions` / `apply` | admissions | 1600 chars | 200 |
 | `reddit.com` | reddit | 900 chars | 150 |
 | anything else | general | 1400 chars | 200 |
+
+---
+
+## Sanity Check (Agentic RAG only)
+
+Before retrieved chunks are passed to the Agent, `sanity_check.py` automatically scans each chunk for implausible numerical values and annotates suspicious ones with a ⚠️ flag.
+
+| Rule | Condition |
+|---|---|
+| `gpa_out_of_range` | GPA > 4.5 or == 0.0 |
+| `toefl_out_of_range` | TOEFL iBT > 120 |
+| `ielts_out_of_range` | IELTS > 9.0 |
+| `gre_out_of_range` | GRE outside 130–340 |
+| `tuition_suspiciously_high` | Single fee > $100,000 |
+
+When the Agent sees a flagged chunk, it will either **re-search** with a different query, or **warn the user** in the final answer that the data may be incorrect.
