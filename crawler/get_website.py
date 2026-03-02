@@ -11,7 +11,7 @@ def get_website():
     
     # 這裡定義你的 Prompt
     current_prompt = (
-        "List the top 5 world universities with their official website URLs in JSON format. "
+        "List the top 5 world universities in computer science with their official website URLs in JSON format (請列出學校的網站以及CS科系的網站). "
         "Use a root key 'universities' containing a list of objects with fields: "
         "'school_name' and 'official_website'." 
     )

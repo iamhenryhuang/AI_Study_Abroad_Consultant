@@ -1,25 +1,30 @@
 {
-  "prompt_hash": "eae7033ef8e5732c829cfb4cf7d1cdde",
+  "prompt_hash": "c72c0f6877651ff98dacb3ede491bcc6",
   "data": [
     {
       "school_name": "Massachusetts Institute of Technology",
-      "official_website": "https://www.mit.edu"
+      "official_website": "https://www.mit.edu/",
+      "cs_department": "https://csail.mit.edu/"
     },
     {
       "school_name": "Stanford University",
-      "official_website": "https://www.stanford.edu"
+      "official_website": "https://www.stanford.edu/",
+      "cs_department": "https://cs.stanford.edu/"
+    },
+    {
+      "school_name": "Carnegie Mellon University",
+      "official_website": "https://www.cmu.edu/",
+      "cs_department": "https://www.cs.cmu.edu/"
+    },
+    {
+      "school_name": "University of California, Berkeley",
+      "official_website": "https://www.berkeley.edu/",
+      "cs_department": "https://www.cs.berkeley.edu/"
     },
     {
       "school_name": "Harvard University",
-      "official_website": "https://www.harvard.edu"
-    },
-    {
-      "school_name": "California Institute of Technology",
-      "official_website": "https://www.caltech.edu"
-    },
-    {
-      "school_name": "University of Cambridge",
-      "official_website": "https://www.cam.ac.uk"
+      "official_website": "https://www.harvard.edu/",
+      "cs_department": "https://www.seas.harvard.edu/computer-science"
     }
   ]
 }

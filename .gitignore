@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 
+acres_profile/
+
 # Python
 __pycache__/
 *.py[cod]

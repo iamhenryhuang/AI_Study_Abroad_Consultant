@@ -1,16 +1,5 @@
 
 
--- 1. Universities Table
-CREATE TABLE IF NOT EXISTS universities (
-    id SERIAL PRIMARY KEY,
-    school_id VARCHAR(100) UNIQUE NOT NULL,
-    university VARCHAR(255) NOT NULL,
-    program VARCHAR(255) NOT NULL,
-    official_link TEXT,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- 2. Requirements Table
 CREATE TABLE IF NOT EXISTS requirements (
     id SERIAL PRIMARY KEY,
@@ -43,7 +32,6 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
     chunk_index   INTEGER NOT NULL,
     chunk_text    TEXT NOT NULL,
-    embedding     vector(1024),
     -- 結構化 metadata：存入數字/日期欄位，供 hybrid query WHERE 過濾
     metadata      JSONB,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -1,108 +1,134 @@
+from __future__ import annotations # 解決 ForwardRef 的魔術代碼
 import asyncio
 import json
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.extraction_strategy import LLMExtractionStrategy 
-from crawl4ai import LLMConfig
-from crawl4ai.chunking_strategy import RegexChunking
-from crawl4ai.content_filter_strategy import PruningContentFilter
-#from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerationStrategy
-from pydantic import BaseModel, Field
-from typing import Optional, List
-import litellm
 import os
-import sys
+import time
+from urllib.parse import urljoin
 
-import requests
-from get_website import get_website
-from dotenv import load_dotenv
-from pathlib import Path
+from DrissionPage import ChromiumPage, ChromiumOptions
 from bs4 import BeautifulSoup
 
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, LLMConfig
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
+from dotenv import load_dotenv
+from typing import Optional, List
+from pydantic import BaseModel, Field
 
-#litellm._turn_on_debug()
-
+# 載入環境變數
 load_dotenv()
-os.environ["GROQ_API_KEY"] = os.environ.get("GROQ_API_KEY")
 
+# =========================
+# Pydantic 資料結構 (參考 PTT 版)
+# =========================
 class ConsolidatedAdmissionPost(BaseModel):
-    applicant_id: str
-    gpa: Optional[float]
-    toefl: Optional[int]
-    ielts: Optional[float]
-    gre: Optional[str]
+    applicant_id: Optional[str] = None
+    gpa: Optional[float] = None
+    toefl: Optional[int] = None
+    gre: Optional[str] = None
     admissions: List[str] = Field(description="錄取的學校與學位")
     rejections: List[str] = Field(description="拒絕的學校與學位")
-    key_advice: List[str] = Field(description="作者提到的檢討或建議事項")
-    pros: List[str] = Field(description="這間學校的優點")
-    cons: List[str] = Field(description="這間學校的缺點")
+    key_advice: List[str] = Field(description="作者提到的建議")
+    original_school: Optional[str] = Field(None, description="本科學校名稱")
 
-# --- 傳統方法：快速抓取連結 ---
-def get_ptt_links(keyword, board="studyabroad"):
-    url = f"https://www.ptt.cc/bbs/{board}/search?q={keyword}"
-    # PTT 必備：過 18 歲的 Cookie
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
-    }
-    cookies = {'over18': '1'}
+# =========================
+# 傳統方法：使用 DrissionPage 獲取內容與解鎖
+# =========================
+def get_1point3_links(page, fid=82):
+    url = f"https://www.1point3acres.com/bbs/forum.php?mod=forumdisplay&fid={fid}"
+    print(f"📡 正在搜尋列表頁...")
+    page.get(url)
+    time.sleep(2)
     
-    print(f"📡 正在發送傳統 Request 搜尋: {keyword}")
-    res = requests.get(url, headers=headers, cookies=cookies)
-    soup = BeautifulSoup(res.text, 'html.parser')
-    
+    soup = BeautifulSoup(page.html, "lxml")
     links = []
-    # 這裡就是傳統爬蟲的精髓：精準切片
-    for entry in soup.select('div.r-ent div.title a'):
-        title = entry.text.strip()
+    for a in soup.find_all("a", href=True):
+        if "thread-" in a["href"] and "-1-1.html" in a["href"]:
+            full_url = urljoin("https://www.1point3acres.com/bbs/", a["href"])
+            links.append(full_url)
+    return list(set(links)) # 去重
 
-        if "CS" not in title and "Computer Science" not in title:
-            continue
-
-        links.append(f"https://www.ptt.cc{entry['href']}")
+def get_thread_html_content(page, url):
+    print(f"📥 正在讀取文章並解鎖隱藏內容: {url}")
+    page.get(url)
+    time.sleep(2)
     
-    return links
+    # 模仿你提到的「點擊查看」處理
+    buttons = page.eles('text:点击查看')
+    for btn in buttons:
+        try:
+            btn.click(by_js=True)
+            page.wait(1)
+        except: pass
+    
+    return page.html
 
-# --- 現代 AI 方法：分析內文 ---
-async def analyze_posts(urls):
-    api_key = os.getenv("GROQ_API_KEY")
-    if not urls:
-        print("沒有找到任何連結。")
-        return
-
-    # AI 配置
+# =========================
+# 現代 AI 方法：分析內文 (參考你的 PTT 正確版本)
+# =========================
+async def analyze_1point3_posts(html_contents):
+    # AI 配置 - 採用與你範例一致的寫法
     strategy = LLMExtractionStrategy(
         llm_config=LLMConfig(provider="groq/llama-3.1-8b-instant"),
         schema=ConsolidatedAdmissionPost.model_json_schema(),
-        extraction_type="schema", 
+        extraction_type="schema",
         instruction="""
-        請將整篇 PTT 文章彙整為一個 JSON 物件。
-        1. 提取 GPA、TOEFL、GRE 等量化指標。
-        2. 整理錄取(Admission)與拒絕(Rejection)的清單。
-        3. 請整理出作者的建議事項，不要遺漏
-        4. 請整理出這間學校的優點和缺點 並列典表示
+        請將這篇一畝三分地的錄取匯報文章彙整為 JSON。
+        1. 提取 GPA、TOEFL (T单项)、GRE (G单项) 等量化指標。
+        2. 整理錄取(Admissions)與拒絕(Rejections)清單。
+        3. 提取作者的本科學校 (Original School)。
         """
     )
 
     async with AsyncWebCrawler() as crawler:
-        for url in urls[:5]:  
-            print(f" AI 正在分析文章: {url}")
+        all_results = []
+        for html in html_contents:
+            print(f"🤖 AI 正在分析內容...")
+            # 注意：這裡使用 url="raw://" 傳遞我們已經抓好的 HTML
             result = await crawler.arun(
-                url=url,
+                url=f"raw://{html}",
                 config=CrawlerRunConfig(extraction_strategy=strategy)
             )
+            
             if result.success:
+                print(f"✅ 抽取成功: {result.extracted_content[:100]}...")
+                all_results.append(json.loads(result.extracted_content))
+            
+            await asyncio.sleep(2) # 避免 Groq 頻率限制
+        return all_results
 
-                print(f"✅ 結果: {result.extracted_content}")
-            await asyncio.sleep(5) 
-        
+# =========================
+# 執行主流程
+# =========================
+async def main_async():
+    # 初始化 DrissionPage
+    co = ChromiumOptions()
+    co.set_user_data_path("acres_profile")
+    page = ChromiumPage(co)
 
+    # 第一步：登入 (一畝三分地必須)
+    page.get("https://auth.1point3acres.com/login")
+    print("請在瀏覽器完成登入與 Cloudflare 驗證...")
+    input("👉 好了嗎？按 Enter 繼續...")
 
-# --- 執行 ---
-if __name__ == "__main__":
-    # 第一步：傳統找網址
-    target_urls = get_ptt_links("CMU")
+    # 第二步：獲取網址
+    target_urls = get_1point3_links(page)
     print(f"✅ 找到 {len(target_urls)} 筆網址")
+
+    # 第三步：獲取所有 HTML (因為我們需要 DrissionPage 解鎖，所以先抓 HTML)
+    html_list = []
+    for url in target_urls[:3]: # 測試前 3 篇
+        html_content = get_thread_html_content(page, url)
+        html_list.append(html_content)
+
+    # 第四步：非同步 AI 分析
+    final_data = await analyze_1point3_posts(html_list)
+
+    # 儲存結果
+    with open("1point3_final_analysis.json", "w", encoding="utf-8") as f:
+        json.dump(final_data, f, ensure_ascii=False, indent=2)
     
-    # 第二步：非同步 AI 分析
-    asyncio.run(analyze_posts(target_urls))
+    print("\n🎉 全部任務完成！資料已存入 json 檔。")
+    page.quit()
+
+if __name__ == "__main__":
+    asyncio.run(main_async())
