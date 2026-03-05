@@ -35,7 +35,6 @@ from google.genai import types
 from generator.gemini import get_gemini_client, format_context_for_prompt
 from retriever.search import search_core
 from retriever.sanity_check import annotate_results
-
 # ── 工具定義（Gemini Function Calling 格式）────────────────────────
 
 _TOOLS = types.Tool(
@@ -118,10 +117,10 @@ _TOOLS = types.Tool(
 _AGENT_SYSTEM_PROMPT = """你是一位北美 CS 研究所申請諮詢 AI Agent。你擁有三個搜尋工具，可以從向量資料庫中查詢各大學的招生資訊。
 
 你的任務流程：
-1. 分析使用者的問題，判斷需要哪些具體資訊。
-2. 有策略地呼叫搜尋工具取得資料。
-3. 評估搜到的資料是否足夠回答問題；若不夠，繼續搜尋。
-4. 當資料充足時，生成清晰、準確的最終回答。
+1. 【Planning（計畫階段）】：在採取任何行動前，先進行思考，分析問題並輸出一段簡短的「搜尋計畫」，說明你打算分幾步搜尋、預計使用哪些工具、查詢哪些關鍵字。
+2. 【Action（執行階段）】：根據你的計畫呼叫相應的搜尋工具。
+3. 【Observation 與反思】：根據搜尋結果，判斷資料是否足夠。若不足，再次進行簡短的 Planning 並繼續呼叫工具搜尋。
+4. 【Final Answer（生成答案）】：當資料充足時，整合所有資訊，生成清晰、準確的最終回答。
 
 搜尋策略指南：
 - 複合問題（比較多校、詢問多個面向）→ 拆成多次單一目標搜尋
@@ -285,6 +284,12 @@ def run_agent(
 
         # 將 model 回應加入歷史
         contents.append(candidate.content)
+
+        # 印出 Agent 的計畫/想法
+        if verbose and text_parts:
+            thought = "".join(text_parts).strip()
+            if thought:
+                print(f"  [Agent 思考/計畫]: {thought}\n")
 
         # ── 情況 A：沒有工具呼叫 → 這是最終回答 ───────────────────
         if not function_calls:
