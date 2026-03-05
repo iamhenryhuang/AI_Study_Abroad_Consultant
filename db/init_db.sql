@@ -1,12 +1,12 @@
 -- ============================================================
--- Study Abroad Consultant — Database Schema (v2)
+-- Study Abroad Consultant — Database Schema
 -- 資料格式: school_info.json = { "url": "純文字", ... }
 -- 學校透過 URL domain 自動識別
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 先清除舊表（順序很重要，先刪有外鍵的子表）
+-- 先清除舊表
 DROP TABLE IF EXISTS document_chunks CASCADE;
 DROP TABLE IF EXISTS web_pages CASCADE;
 DROP TABLE IF EXISTS universities CASCADE;

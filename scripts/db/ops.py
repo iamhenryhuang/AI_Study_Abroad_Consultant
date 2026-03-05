@@ -33,24 +33,34 @@ def _escape_sql(s):
 # ── setup_db ─────────────────────────────────────────────────
 
 def setup_db():
-    """檢查連線並在需要時建立 study_abroad 資料庫。"""
+    """檢查連線並在需要時建立目標資料庫。"""
+    from urllib.parse import urlparse, urlunparse
     url = DATABASE_URL
-    if not url or "/study_abroad" not in url:
-        print("錯誤: .env 中 DATABASE_URL 需指向 study_abroad（或欲建立的 DB 名稱）。")
+    if not url:
+        print("錯誤: .env 中未設定 DATABASE_URL。")
         return False
-    postgres_url = url.replace("/study_abroad", "/postgres")
+
+    # 從 URL 中解析目標資料庫名稱
+    parsed = urlparse(url)
+    db_name = parsed.path.lstrip("/")  # e.g. 'study_abroad_rag'
+    if not db_name:
+        print("錯誤: DATABASE_URL 中找不到資料庫名稱。")
+        return False
+
+    # 建立連往 postgres（預設維護庫）的 URL
+    postgres_url = urlunparse(parsed._replace(path="/postgres"))
     try:
         print(f"連線至: {postgres_url.split('@')[-1]}")
         conn = psycopg2.connect(postgres_url)
         conn.autocommit = True
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = 'study_abroad'")
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
             if not cur.fetchone():
-                print("建立資料庫 study_abroad ...")
-                cur.execute("CREATE DATABASE study_abroad")
-                print("已建立 study_abroad。")
+                print(f"建立資料庫 {db_name} ...")
+                cur.execute(f"CREATE DATABASE \"{db_name}\"")
+                print(f"已建立 {db_name}。")
             else:
-                print("資料庫 study_abroad 已存在。")
+                print(f"資料庫 {db_name} 已存在。")
         conn.close()
         print("連線測試通過。")
         return True
