@@ -43,36 +43,46 @@ def generate_multi_queries(query: str, n: int = 3) -> list[str]:
         print(f"[Multi-Query] 生成查詢時出錯: {e}")
         return [query]
 
-def search_with_multi_query(query: str, top_k: int = 3, use_rerank: bool = True) -> list[dict]:
+def search_with_multi_query(
+    query: str,
+    top_k: int = 5,
+    use_rerank: bool = True,
+    school_id: str | None = None,
+) -> list[dict]:
     """
     執行 Multi-Query 檢索流程。
+
+    Args:
+        query:     原始使用者問題
+        top_k:     最終返回筆數
+        use_rerank: 是否使用 cross-encoder 重排序
+        school_id: 限定學校（e.g. 'cmu', 'caltech'）
     """
     # 1. 生成多個問題
     multi_queries = generate_multi_queries(query)
     print(f"  [Multi-Query] 生成的問題：{multi_queries}")
-    
+
     # 2. 對每個問題執行檢索
     all_results = []
-    seen_chunks = set() # 用於去重，以 chunk_text 為 key
-    
+    seen_chunks: set[str] = set()  # 以 chunk_text 去重
+
     for q in multi_queries:
-        # 這裡 use_rerank 先設為 False，因為我們最後會統一重排序
-        results = search_core(q, top_k=top_k * 2, use_rerank=False)
+        # use_rerank=False：先不重排，最後統一做
+        results = search_core(q, top_k=top_k * 2, use_rerank=False, school_id=school_id)
         for res in results:
-            chunk_key = res['chunk_text']
+            chunk_key = res["chunk_text"]
             if chunk_key not in seen_chunks:
                 seen_chunks.add(chunk_key)
                 all_results.append(res)
-    
-    # 3. 統一執行重排序（由 LLM 決定哪 3 個最適合原本的問題）
+
+    # 3. 統一重排序
     if use_rerank and all_results:
         print(f"  [Multi-Query] 正在對 {len(all_results)} 個候選結果進行重排序...")
         final_results = rerank(query, all_results, top_n=top_k)
     else:
-        # 如果不重排序，就根據原始向量分數排序並取 top_k
-        all_results.sort(key=lambda x: x.get('vector_score', 0), reverse=True)
+        all_results.sort(key=lambda x: x.get("vector_score", 0), reverse=True)
         final_results = all_results[:top_k]
-        
+
     return final_results
 
 if __name__ == "__main__":

@@ -1,11 +1,19 @@
 """
-RAG 完整流程：檢索 -> 重排序 -> 生成回答 -> (可選) 評估。
+rag_pipeline.py — RAG 完整流程（v2）
+
+檢索 → 重排序 → 生成回答
+或
+Agentic RAG： Gemini Function Calling ReAct Loop
+
+v2 改動：
+  - 回傳結果包含 source_url，讓 Gemini 可以在回答中引用網頁來源
+  - run_rag_pipeline 新增 school_id 參數，支援指定學校限定搜尋
 """
+
 import sys
 import argparse
 from pathlib import Path
 
-# 讓 scripts 目錄在 path 中
 CURRENT_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = CURRENT_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
@@ -13,71 +21,113 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from retriever.search import search_core
 from retriever.multi_query import search_with_multi_query
+from retriever.agent import run_agent
 from generator.gemini import generate_answer
-from evaluator.rag_evaluation import run_triad_evaluation
 
-def run_rag_pipeline(query: str, top_k: int = 7, evaluate: bool = False, use_multi_query: bool = False):
+
+
+def run_rag_pipeline(
+    query: str,
+    top_k: int = 7,
+    use_multi_query: bool = False,
+    school_id: str | None = None,
+) -> bool:
     """
     執行完整的 RAG 流程。
+
     Args:
-        query: 使用者提出的問題。
-        top_k: 檢索的數量。
-        evaluate: 是否啟用 RAG Triad 評估。
+        query:           使用者提出的問題。
+        top_k:           檢索的數量。
         use_multi_query: 是否使用 Multi-Query 擴展查詢。
+        school_id:       限定搜尋的學校（e.g. 'cmu', 'caltech'），None 表示全部。
     """
-    print(f"\n開始執行 RAG 流程，問題：'{query}'")
-    
+    print(f"\n開始執行 RAG 流程")
+    print(f"   問題：'{query}'")
+    if school_id:
+        print(f"過濾學校：{school_id}")
+
     # 1. 檢索與重排序
     if use_multi_query:
         print(f"  [RAG] 正在執行 Multi-Query 檢索...")
-        results = search_with_multi_query(query, top_k=top_k, use_rerank=True)
+        results = search_with_multi_query(
+            query, top_k=top_k, use_rerank=True, school_id=school_id
+        )
     else:
         print(f"  [RAG] 正在檢索相關資料...")
-        results = search_core(query, top_k=top_k, use_rerank=True)
-    
+        results = search_core(
+            query, top_k=top_k, use_rerank=True, school_id=school_id
+        )
+
     if not results:
         print("未能檢索到相關資訊。")
         return False
-        
+
+    print(f"  [RAG] 檢索到 {len(results)} 筆資料")
+
     # 2. 生成回答
-    print(f"  [RAG] 正在使用 Gemini 2.5 Flash 生成回答...")
+    print(f"  [RAG] 正在使用 Gemini 生成回答...")
     answer = generate_answer(query, results)
-    
+
     if answer:
-        print("\n" + "="*30 + " Gemini 回答 " + "="*30)
+        print("\n" + "=" * 30 + " Gemini 回答 " + "=" * 30)
         print(answer)
-        print("="*73 + "\n")
-        
-        # 3. 執行評估 (RAG Triad)
-        if evaluate:
-            from generator.gemini import format_context_for_prompt
-            # 傳遞完整的、包含 Metadata 的格式化內容
-            formatted_contexts = [format_context_for_prompt([res]) for res in results]
-            run_triad_evaluation(query, formatted_contexts, answer)
-            
+        print("=" * 73 + "\n")
         return True
     else:
         print("生成回答失敗。")
         return False
 
+
+def run_agent_pipeline(
+    query: str,
+    max_steps: int = 5,
+    verbose: bool = True,
+) -> bool:
+    """
+    執行 Agentic RAG 流程（ReAct Loop）。
+
+    Args:
+        query:     使用者問題
+        max_steps: 最大搜尋迭代次數
+        verbose:   是否印出每步驟的推理過程
+    """
+    answer = run_agent(query, max_steps=max_steps, verbose=verbose)
+    if answer:
+        print("\n" + "=" * 30 + " Gemini Agent 回答 " + "=" * 30)
+        print(answer)
+        print("=" * 73 + "\n")
+        return True
+    else:
+        print("生成回答失敗。")
+        return False
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="執行 RAG 流程")
     parser.add_argument("query", nargs="?", help="使用者問題")
-    parser.add_argument("--eval", action="store_true", help="是否執行 RAG Triad 評估")
+    parser.add_argument("--agent", action="store_true", help="使用 Agentic RAG（ReAct Loop）")
+    parser.add_argument("--max-steps", type=int, default=5, help="Agent 最大迭代次數")
     parser.add_argument("--multi-query", action="store_true", help="是否啟用 Multi-Query")
+    parser.add_argument("--school", type=str, default=None, help="限定學校 e.g. cmu, caltech")
+    parser.add_argument("--top-k", type=int, default=7, help="檢索數量")
     args = parser.parse_args()
-    
+
     q = args.query
     if not q:
-        q = input("請輸入問題以執行 RAG 檢索生成 (輸入 '--eval' 結尾可開啟評估, '--mq' 可開啟 Multi-Query): ").strip()
-        if q.endswith("--eval"):
-            q = q.replace("--eval", "").strip()
-            args.eval = True
+        q = input("請輸入問題: ").strip()
         if q.endswith("--mq"):
             q = q.replace("--mq", "").strip()
             args.multi_query = True
-    
+
     if q:
-        run_rag_pipeline(q, evaluate=args.eval, use_multi_query=args.multi_query)
+        if args.agent:
+            run_agent_pipeline(q, max_steps=args.max_steps)
+        else:
+            run_rag_pipeline(
+                q,
+                top_k=args.top_k,
+                use_multi_query=args.multi_query,
+                school_id=args.school,
+            )
     else:
         print("未輸入問題。")

@@ -1,14 +1,23 @@
 """
 重排序模組：使用 Cross-Encoder 對向量檢索結果進行精確評分。
+
+模型路徑由 .env 中的 BGE_RERANKER_MODEL_PATH 決定，
+預設為 D:\\DforDownload\\BAAI\\bge-reranker-v2-m3。
 """
 from __future__ import annotations
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 from sentence_transformers import CrossEncoder
 
-# 模型放置路徑 (仿照 vectorize.py)
-_LOCAL_BASE = Path(r"D:\DforDownload\BAAI")
-_MODEL_NAME = "bge-reranker-v2-m3"
-_MODEL_PATH = _LOCAL_BASE / _MODEL_NAME
+load_dotenv()
+
+# 從 .env 讀取路徑；若未設定則使用預設 D 槽路徑
+_MODEL_PATH = Path(
+    os.getenv("BGE_RERANKER_MODEL_PATH", r"D:\DforDownload\BAAI\bge-reranker-v2-m3")
+)
+_MODEL_NAME = _MODEL_PATH.name
 
 _model: CrossEncoder | None = None
 

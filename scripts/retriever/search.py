@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-檢索模組：將問題轉成向量，並從 pgvector 中尋找最相關的 chunk。
+search.py — 向量檢索模組（v2）
+
+配合新 schema（web_pages + document_chunks），
+檢索時 JOIN web_pages 取得 url、page_type，
+並回傳包含 source_url 的結果，讓 LLM 能引用來源。
 """
-import os
+
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
 # 讓 scripts 目錄在 path 中
-# 假設此檔案位於 scripts/retriever/search.py
 CURRENT_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = CURRENT_DIR.parent
 ROOT_DIR = SCRIPTS_DIR.parent
@@ -19,9 +24,36 @@ from db.connection import get_connection
 from embedder.vectorize import embed_texts
 from retriever.reranker import rerank
 
-def search_core(query: str, top_k: int = 3, use_rerank: bool = True) -> list[dict]:
-    """執行檢索核心邏輯，回傳文件列表。"""
-    # 1. 向量化問題
+
+def search_core(
+    query: str,
+    top_k: int = 5,
+    use_rerank: bool = True,
+    school_id: str | None = None,
+    page_type: str | None = None,
+) -> list[dict]:
+    """
+    執行向量檢索，回傳文件列表。
+
+    Args:
+        query:      使用者查詢字串
+        top_k:      最終返回筆數
+        use_rerank: 是否啟用 Cross-Encoder 重排序
+        school_id:  若指定則只搜尋該學校（e.g. 'cmu'）
+        page_type:  若指定則只搜尋該類型頁面（e.g. 'faq'）
+
+    Returns:
+        list of dict，每個 dict 包含：
+          - chunk_text
+          - source_url
+          - page_type
+          - university_name
+          - school_id
+          - vector_score
+          - rerank_score (若 use_rerank=True)
+          - metadata (JSONB)
+    """
+    # 1. 向量化查詢
     query_embeddings = embed_texts([query])
     if not query_embeddings:
         return []
@@ -34,86 +66,116 @@ def search_core(query: str, top_k: int = 3, use_rerank: bool = True) -> list[dic
 
     try:
         with conn.cursor() as cur:
-            # 3. 執行向量相似度搜尋 (初篩)
-            initial_k = 15 if use_rerank else top_k
-            
-            cur.execute("""
-                SELECT 
-                    dc.chunk_text, 
+            # 3. 組裝 WHERE 條件（可選的 school_id / page_type 過濾）
+            filters = []
+            params = []
+
+            if school_id:
+                filters.append("dc.school_id = %s")
+                params.append(school_id)
+            if page_type:
+                filters.append("dc.page_type = %s")
+                params.append(page_type)
+
+            where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
+
+            # 初篩數量：rerank 時多撈一些候選
+            initial_k = top_k * 3 if use_rerank else top_k
+
+            sql = f"""
+                SELECT
+                    dc.chunk_text,
+                    dc.source_url,
+                    dc.page_type,
+                    dc.school_id,
                     dc.metadata,
-                    dc.source,
-                    u.university,
-                    u.program,
+                    u.name          AS university_name,
                     1 - (dc.embedding <=> %s::vector) AS vector_score
                 FROM document_chunks dc
                 JOIN universities u ON dc.university_id = u.id
+                {where_clause}
                 ORDER BY dc.embedding <=> %s::vector
                 LIMIT %s;
-            """, (query_vector, query_vector, initial_k))
-            
+            """
+
+            # query_vector 出現兩次（計算分數 + 排序）
+            cur.execute(sql, [query_vector] + params + [query_vector, initial_k])
+
             colnames = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
-            
+
             if not rows:
                 return []
 
             candidates = [dict(zip(colnames, row)) for row in rows]
 
-            # 4. 重排序 (精篩)
-            if use_rerank:
-                results = rerank(query, candidates, top_n=top_k)
-            else:
-                results = candidates[:top_k]
-            
-            return results
-            
+        # 4. 重排序（精篩）
+        if use_rerank and len(candidates) > top_k:
+            results = rerank(query, candidates, top_n=top_k)
+        else:
+            results = candidates[:top_k]
+
+        return results
+
     except Exception as e:
         print(f"搜尋核心出錯: {e}")
+        import traceback
+        traceback.print_exc()
         return []
     finally:
         conn.close()
 
-def run_search(query: str, top_k: int = 3, use_rerank: bool = True):
-    """執行向量搜尋（可選重排序）並印出結果。"""
-    print(f"\n正在檢索問題: '{query}'")
-    print(f"  [1/2] 正在執行向量搜尋與重排序...")
-    
-    results = search_core(query, top_k=top_k, use_rerank=use_rerank)
-    
+
+def run_search(
+    query: str,
+    top_k: int = 5,
+    use_rerank: bool = True,
+    school_id: str | None = None,
+):
+    """執行向量搜尋並印出結果（CLI 用）。"""
+    print(f"\n正在檢索：'{query}'")
+    if school_id:
+        print(f"   [過濾] 學校: {school_id}")
+    print(f"   [1/2] 執行向量搜尋...")
+
+    results = search_core(query, top_k=top_k, use_rerank=use_rerank, school_id=school_id)
+
     if not results:
         print("查無相關資料。")
         return True
 
-    print(f"  [2/2] 檢索完成，結果如下：\n")
+    print(f"   [2/2] 完成，共 {len(results)} 筆結果\n")
     print("=" * 80)
-    
+
     for i, res in enumerate(results, 1):
         score_str = f"向量分數: {res['vector_score']:.4f}"
-        if 'rerank_score' in res:
-            score_str += f", Re-rank 分數: {res['rerank_score']:.4f}"
-        
-        output = (
+        if "rerank_score" in res:
+            score_str += f"  Re-rank: {res['rerank_score']:.4f}"
+
+        print(
             f"【結果 {i}】 {score_str}\n"
-            f"學校: {res['university']}\n"
-            f"學系: {res['program']}\n"
-            f"來源: {res.get('source', 'unknown')}\n"
-            f"摘要: {res['chunk_text'].strip()[:600]}...\n"
+            f"  學校    : {res['university_name']} ({res['school_id']})\n"
+            f"  頁面類型: {res.get('page_type', 'unknown')}\n"
+            f"  來源 URL: {res.get('source_url', 'N/A')}\n"
+            f"  內容摘要: {res['chunk_text'].strip()[:500]}...\n"
+            + "-" * 80
         )
-        
-        meta = res.get('metadata')
-        if meta:
-            output += "--- 結構化資訊 ---\n"
-            output += f"  - GPA 最低要求: {meta.get('minimum_gpa', 'N/A')}\n"
-            output += f"  - TOEFL 最低要求: {meta.get('toefl_min', 'N/A')}\n"
-            output += f"  - GRE 狀態: {meta.get('gre_status', 'N/A')}\n"
-            output += f"  - 截止日期: {meta.get('fall_deadline', 'N/A')}\n"
-        output += "-" * 80 + "\n"
-        print(output)
-    
+
     return True
 
+
 if __name__ == "__main__":
-    test_query = "UIUC MSCS GPA and TOEFL requirements?"
-    if len(sys.argv) > 1:
-        test_query = " ".join(sys.argv[1:])
-    run_search(test_query)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="向量檢索")
+    parser.add_argument("query", nargs="?", help="查詢字串")
+    parser.add_argument("--top-k", type=int, default=5, help="回傳筆數")
+    parser.add_argument("--school", type=str, default=None, help="限定學校 e.g. cmu, caltech")
+    parser.add_argument("--no-rerank", action="store_true", help="關閉重排序")
+    args = parser.parse_args()
+
+    q = args.query or input("請輸入查詢: ").strip()
+    if q:
+        run_search(q, top_k=args.top_k, use_rerank=not args.no_rerank, school_id=args.school)
+    else:
+        print("未輸入查詢。")
