@@ -80,6 +80,10 @@ SCHOOL_MAP: dict[str, dict] = {
         "school_id": "uw",
         "name": "University of Washington",
     },
+    "nccu.edu.tw": {
+        "school_id": "nccu",
+        "name": "National Chengchi University",
+    },
 }
 
 
@@ -88,21 +92,47 @@ def identify_school(url: str, filename_hint: str | None = None) -> dict | None:
     從 URL 的 domain 找出對應學校資訊。
     若識別失敗，則嘗試使用 filename_hint。
     回傳 {'school_id': ..., 'name': ..., 'domain': ...}，若無法識別則回傳 None。
+
+    特殊處理：
+      - scholar.google.com → 教授資料 JSON，學校資訊來自 filename_hint
+        （因為 Google Scholar 是共用 domain，無法從 URL 判斷學校）
     """
     try:
         hostname = urlparse(url).hostname or ""
     except Exception:
         hostname = ""
 
-    # 1. 優先從 URL 識別
+    # Google Scholar URL → 直接走 filename_hint（學校資訊在檔名裡）
+    # 例如 stanford_professors.json → filename_hint = "stanford_professors" → school_id = "stanford"
+    if "scholar.google.com" in hostname:
+        if filename_hint:
+            hint_lower = filename_hint.lower()
+            # 支援 "{school_id}_professors" 格式的 filename
+            hint_clean = hint_lower.replace("_professors", "").replace("_professor", "")
+            for domain, info in SCHOOL_MAP.items():
+                if (
+                    info["school_id"] == hint_clean
+                    or hint_clean in info["name"].lower()
+                    or info["school_id"] in hint_clean
+                ):
+                    return {**info, "domain": hostname}
+        return None  # 無法從 Google Scholar URL 判斷學校且沒有 filename_hint
+
+    # 1. 優先從 URL 識別（一般學校官網）
     for domain, info in SCHOOL_MAP.items():
         if domain in hostname:
             return {**info, "domain": hostname}
 
     # 2. 回退到 filename_hint 識別
     if filename_hint:
+        hint_lower = filename_hint.lower()
+        hint_clean = hint_lower.replace("_professors", "").replace("_professor", "")
         for domain, info in SCHOOL_MAP.items():
-            if info["school_id"] == filename_hint.lower() or filename_hint.lower() in info["name"].lower():
+            if (
+                info["school_id"] == hint_clean
+                or hint_clean in info["name"].lower()
+                or info["school_id"] in hint_clean
+            ):
                 return {**info, "domain": hostname or f"{filename_hint}.edu"}
 
     return None

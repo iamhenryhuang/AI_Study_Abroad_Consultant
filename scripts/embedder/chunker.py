@@ -26,14 +26,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # 原始資料為英文，平均每個單字約 5–6 字元 + 空格
 # chunk_size=1400 ≈ 200–250 個英文單字（約 2–3 個段落）
 _PAGE_TYPE_SIZES: dict[str, int] = {
-    "faq":          2000,   # FAQ 個別問答若超過此長度才二次切分
-    "checklist":    1200,   # 條列式資訊，保留完整條目
-    "requirements": 1200,
-    "admissions":   1600,   # 申請說明段落
-    "apply":        1600,
-    "accepting":    1400,
-    "reddit":        900,   # Reddit 口語短段落
-    "general":      1400,
+    "faq":               2000,   # FAQ 個別問答若超過此長度才二次切分
+    "checklist":         1200,   # 條列式資訊，保留完整條目
+    "requirements":      1200,
+    "admissions":        1600,   # 申請說明段落
+    "apply":             1600,
+    "accepting":         1400,
+    "reddit":             900,   # Reddit 口語短段落
+    "professor_profile": 1800,   # 教授 Google Scholar profile（保留完整個人資訊）
+    "professor_paper":   1000,   # 單篇論文資訊（通常較短，不需太大）
+    "general":           1400,
 }
 
 _DEFAULT_CHUNK_SIZE = 1400
@@ -98,13 +100,18 @@ def infer_page_type(url: str) -> str:
     """
     從 URL 路徑推斷頁面類型。
 
-    回傳 page_type 字串，例如 'faq', 'admissions', 'general'。
+    回傳 page_type 字串，例如 'faq', 'admissions', 'professor_profile', 'general'。
     Reddit 資料通常由 pipeline 直接傳入 page_type='reddit'，
     此處的 URL 判斷作為備用。
     """
     url_lower = url.lower()
     if "reddit.com" in url_lower:
         return "reddit"
+    # Google Scholar 教授相關頁面
+    if "scholar.google.com" in url_lower:
+        if "view_op=view_citation" in url_lower:
+            return "professor_paper"    # 單篇論文 citation 頁面
+        return "professor_profile"      # 教授 profile 頁面
     if "faq" in url_lower or "frequently-asked" in url_lower:
         return "faq"
     if "checklist" in url_lower or "requirements" in url_lower:

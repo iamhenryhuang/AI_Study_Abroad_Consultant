@@ -18,6 +18,10 @@ scripts/
 │   ├── vectorize.py        ← BAAI/bge-m3 embeddings (1024-dim)
 │   ├── store.py            ← upsert helper for document_chunks
 │   └── verifier.py         ← verify chunk counts, vector dims, source URLs
+├── professor_fetcher/
+│   ├── fetcher.py          ← SerpAPI tool to search & fetch Scholar data
+│   ├── formatter.py        ← convert API data to project-standard JSON
+│   └── run_fetch.py        ← CLI: fetch single/batch professors + optional --embed
 ├── retriever/
 │   ├── search.py           ← vector search (HNSW), optional school_id/page_type filter
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
@@ -43,6 +47,8 @@ scripts/
 | `python scripts/run.py verify-db` | Print table row counts (universities, web_pages, chunks) |
 | `python scripts/run.py verify-vdb` | Print chunk/vector breakdown per school & page type |
 | `python scripts/run.py export` | Write `db/exported_data.sql` summary |
+| `python -m scripts.professor_fetcher.run_fetch --name "Name" --school "School"` | Fetch professor data |
+| `python -m scripts.professor_fetcher.run_fetch --config config.json --embed` | Batch fetch + embed |
 
 ### Embedding Only
 
@@ -116,6 +122,8 @@ The school is inferred from the URL domain (primary) or filename (fallback) via 
 | `faq` | faq | 2000 | 200 | Q&A regex pre-split |
 | `checklist` / `requirements` | checklist | 1200 | 150 | |
 | `admissions` / `apply` | admissions | 1600 | 200 | |
+| `professor_profile` | professor_profile | 1800 | 200 | Large profile context |
+| `professor_paper` | professor_paper | 1000 | 150 | Precise paper details |
 | `reddit.com` | reddit | 900 | 150 | Short conversational posts |
 | *(anything else)* | general | 1400 | 200 | |
 
