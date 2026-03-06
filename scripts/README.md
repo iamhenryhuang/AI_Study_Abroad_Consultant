@@ -76,11 +76,45 @@ python scripts/run.py agent "What do Reddit users say about CMU MSCS?" --max-ste
 
 **Flags:**
 
-| Flag | Effect |
-|------|--------|
 | `--school cmu` | Filter retrieval to a single school (`cmu`, `caltech`, …) |
 | `--mq` | Enable Multi-Query expansion (Gemini generates 3 related queries) |
 | `--max-steps N` | Max ReAct iterations for `agent` command (default: 5) |
+
+---
+
+## Professor Data Fetching (SerpAPI)
+
+Fetches a professor's research areas and recent papers from Google Scholar. Results are stored in `data/{school_id}_professors.json` and automatically integrated during `import` or `init-all`.
+
+### Setup
+1. Get a **SerpAPI Key** at [serpapi.com](https://serpapi.com).
+2. Add to `.env`: `SERPAPI_KEY=your_key`.
+
+### Usage
+Run from project root:
+
+```bash
+# Single professor (searches for author_id automatically)
+python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
+
+# Single professor + immediate embedding
+python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
+
+# Batch mode from config
+python -m scripts.professor_fetcher.run_fetch --config professors.json --embed
+
+# Format of professors.json:
+# [
+#   {"name": "Andrew Ng", "school": "Stanford", "school_id": "stanford"},
+#   {"name": "Yann LeCun", "school": "NYU", "school_id": "nyu"}
+# ]
+```
+
+**Common Flags:**
+- `--author-id "ID"`: Skip search if ID is known (e.g., `47730H0AAAAJ`).
+- `--cutoff-year 2024`: Only fetch papers from this year onwards.
+- `--max-papers 20`: Limit recent paper count.
+- `--embed`: Automatically run the embedding pipeline after fetching.
 
 ---
 
@@ -159,8 +193,9 @@ Agent response logic when a ⚠️ flag is detected:
 
 - PostgreSQL with `pgvector` extension enabled
 - Local model files (paths set in `.env`):
-  - `BGE_EMBED_MODEL_PATH` — path to `BAAI/bge-m3` (default: `D:\DforDownload\BAAI\bge-m3`)
+  - `BGE_EMBED_MODEL_PATH` — path to `BAAI/bge-m3`
   - `BGE_RERANKER_MODEL_PATH` — path to `BAAI/bge-reranker-v2-m3`
-  - Both will auto-download from HuggingFace if the local path does not exist
+- API Keys:
+  - `GOOGLE_API_KEY` (Gemini)
+  - `SERPAPI_KEY` (Professor Fetcher)
 - Python dependencies: `pip install -r requirements.txt`
-- `.env` with `DATABASE_URL`, `GOOGLE_API_KEY`, `BGE_EMBED_MODEL_PATH`, `BGE_RERANKER_MODEL_PATH`
