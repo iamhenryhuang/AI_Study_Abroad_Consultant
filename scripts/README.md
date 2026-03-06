@@ -25,8 +25,11 @@ scripts/
 │   ├── agent.py            ← Agentic RAG: Gemini Function Calling ReAct loop
 │   ├── sanity_check.py     ← pre-LLM validator: flags implausible values (GPA, TOEFL, GRE…)
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
-└── generator/
-    └── gemini.py           ← Gemini 2.5 Flash answer generation
+├── generator/
+│   └── gemini.py           ← Gemini 2.5 Flash answer generation
+└── evaluator/
+    ├── evaluator.py        ← RAGEvaluator 類別（Recall@k、Context Precision/Recall、F1 指標實作）
+    └── eval_runner.py      ← 整合式評估執行腳本，直接對接 search_core + generate_answer
 ```
 
 ---
@@ -66,15 +69,61 @@ python scripts/run.py rag "Stanford MS admission GPA" --school stanford
 # Agentic RAG: Gemini 自動决定搜尋次數與策略（ReAct Loop）
 python scripts/run.py agent "Compare GPA and deadline for Stanford, CMU, and MIT"
 python scripts/run.py agent "What do Reddit users say about CMU MSCS?" --max-steps 6
+
+# Evaluate RAG pipeline
+# 執行完整評估（檢索 + 生成 + F1）
+python scripts/evaluator/eval_runner.py
+
+# 只評估檢索指標（跨過 Gemini API，速度更快）
+python scripts/evaluator/eval_runner.py --no-gen
+
+# 自訂參數：top-k=7、計算 Recall@5，儲存結果
+python scripts/evaluator/eval_runner.py --top-k 7 --k 5 --save eval_results.json
+
+# 單元檢查指標定義正確性
+python scripts/evaluator/evaluator.py
 ```
 
-**Flags:**
+**Flags (search / rag / agent):**
 
 | Flag | Effect |
 |------|--------|
 | `--school cmu` | Filter retrieval to a single school (`cmu`, `caltech`, …) |
 | `--mq` | Enable Multi-Query expansion (Gemini generates 3 related queries) |
 | `--max-steps N` | Max ReAct iterations for `agent` command (default: 5) |
+
+**Flags (eval_runner):**
+
+| Flag | Default | Effect |
+|------|---------|--------|
+| `--top-k N` | 5 | Number of chunks retrieved per query |
+| `--k N` | 3 | k value for Recall@k (must be ≤ top-k) |
+| `--no-rerank` | off | Disable Cross-Encoder reranking |
+| `--no-gen` | off | Skip Gemini generation, evaluate retrieval only |
+| `--save PATH` | — | Save full per-query results to a JSON file |
+
+---
+
+## Evaluation Metrics
+
+`evaluator/eval_runner.py` runs a predefined query dataset against the live pipeline and reports four metrics:
+
+| Metric | Measures | Formula |
+|--------|----------|---------|
+| **Recall@k** | Coverage of GT docs in top-k results | `\|Relevant ∩ Retrieved[:k]\| / \|Relevant\|` |
+| **Context Precision** | Ranking quality of relevant docs (RAGAS) | `Σ P@k for each hit / num_hits` |
+| **Context Recall** | Overall coverage regardless of rank | `\|Relevant ∩ Retrieved\| / \|Relevant\|` |
+| **F1 Score** | Token-level answer quality (SQuAD-style) | Harmonic mean of token precision & recall |
+
+The dataset (`EVAL_DATASET` in `eval_runner.py`) covers **5 schools** with **12 queries** across deadlines, English requirements, recommendation letters, checklists, and FAQ topics:
+
+| school_id | Queries | Data file |
+|-----------|---------|----------|
+| `cmu` | 3 | `data/cmu.json` |
+| `stanford` | 3 | `data/stanford.json` |
+| `mit` | 2 | `data/mit.json` |
+| `caltech` | 2 | `data/caltech.json` |
+| `ucla` | 2 | `data/ucla.json` |
 
 ---
 

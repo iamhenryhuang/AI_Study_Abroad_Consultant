@@ -36,6 +36,9 @@ scripts/
   embedder/             ← chunker, pipeline, vectorize, store, verifier
   retriever/            ← search, reranker, multi_query, rag_pipeline, agent, sanity_check
   generator/            ← Gemini answer generation
+  evaluator/
+    evaluator.py        ← RAGEvaluator class (Recall@k, Context Precision/Recall, F1)
+    eval_runner.py      ← end-to-end evaluation runner integrating search + generate
 ```
 
 ---
@@ -72,6 +75,12 @@ python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
 # Agentic RAG (ReAct Loop — 自動决定搜尋次數與策略)
 python scripts/run.py agent "Compare GPA requirements and deadlines for Stanford, CMU and MIT"
 python scripts/run.py agent "What do admitted students say about the CMU MSCS interview?" --max-steps 6
+
+# Evaluate RAG pipeline (retrieval + generation)
+python scripts/evaluator/eval_runner.py              # full evaluation (Recall@k + CtxPrec + CtxRec + F1)
+python scripts/evaluator/eval_runner.py --no-gen     # retrieval metrics only (skips Gemini, faster)
+python scripts/evaluator/eval_runner.py --top-k 7 --k 5 --save results.json  # custom params + save JSON
+python scripts/evaluator/evaluator.py                # unit-test metric definitions
 
 # Export SQL summary
 python scripts/run.py export
