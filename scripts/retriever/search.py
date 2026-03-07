@@ -18,12 +18,97 @@ if str(SCRIPTS_DIR) not in sys.path:
 from db.connection import get_connection
 from embedder.vectorize import embed_texts
 
+<<<<<<< Updated upstream
 def run_search(query: str, top_k: int = 3):
     """執行向量搜尋並印出結果。"""
     print(f"\n正在檢索問題: '{query}'")
     
     # 1. 向量化問題
     print("  [1/3] 正在將問題轉為向量...")
+=======
+def search_alternative(
+    dream_dept: str,
+    top_k: int = 5,
+) -> list[dict]:
+    """
+    搜尋備案科系 / 學校
+
+    Args:
+        dream_dept: 夢想科系 (e.g. "Computer Science")
+        top_k:      回傳筆數
+
+    Returns:
+        list[dict]
+    """
+
+    if not dream_dept:
+        return []
+
+    # 1️⃣ 建立多個查詢（提高 recall）
+    queries = [
+        f"{dream_dept} program",
+        f"{dream_dept} graduate program",
+        f"universities with strong {dream_dept}",
+        f"top universities for {dream_dept}",
+    ]
+
+    all_results = []
+    seen_urls = set()
+
+    for q in queries:
+        results = search_core(
+            q,
+            top_k=top_k,
+            use_rerank=True
+        )
+
+        for r in results:
+            url = r.get("source_url")
+
+            # 避免重複資料
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                all_results.append(r)
+
+    # 2️⃣ 依 vector_score 排序
+    all_results.sort(
+        key=lambda x: x.get("vector_score", 0),
+        reverse=True
+    )
+
+    # 3️⃣ 回傳前 top_k
+    return all_results[:top_k]
+
+def search_core(
+    query: str,
+    top_k: int = 5,
+    use_rerank: bool = True,
+    school_id: str | None = None,
+    page_type: str | None = None,
+) -> list[dict]:
+    """
+    執行向量檢索，回傳文件列表。
+
+    Args:
+        query:      使用者查詢字串
+        top_k:      最終返回筆數
+        use_rerank: 是否啟用 Cross-Encoder 重排序
+        school_id:  若指定則只搜尋該學校（e.g. 'cmu'）
+        page_type:  若指定則只搜尋該類型頁面（e.g. 'faq'）
+
+    Returns:
+        list of dict，每個 dict 包含：
+          - chunk_text
+          - source_url
+          - page_type
+          - university_name
+          - school_id
+          - vector_score
+          - rerank_score (若 use_rerank=True)
+          - metadata (JSONB)
+    """
+    # 1. 向量化查詢
+>>>>>>> Stashed changes
     query_embeddings = embed_texts([query])
     if not query_embeddings:
         print("向量化失敗。")
