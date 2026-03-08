@@ -35,7 +35,7 @@ scripts/
   db/                   ← connection, setup, import/export
   embedder/             ← chunker, pipeline, vectorize, store, verifier
   professor_fetcher/    ← SerpAPI-based professor profile & paper scraper
-  retriever/            ← search, reranker, multi_query, rag_pipeline, agent, sanity_check
+  retriever/            ← search, reranker, multi_query, rag_pipeline, agent
   generator/            ← Gemini answer generation
 ```
 
@@ -102,21 +102,7 @@ Chunks are sized for **English text** (~5–6 chars/word). FAQ pages use a regex
 | `admissions` / `apply` | admissions | 1600 chars | 200 |
 | `professor_profile` (from Scholar) | professor_profile | 1800 chars | 200 |
 | `professor_paper` (from Scholar) | professor_paper | 1000 chars | 150 |
-| `reddit.com` | reddit | 900 chars | 150 |
 | anything else | general | 1400 chars | 200 |
 
 ---
 
-## Sanity Check (Agentic RAG only)
-
-Before retrieved chunks are passed to the Agent, `sanity_check.py` automatically scans each chunk for implausible numerical values and annotates suspicious ones with a ⚠️ flag.
-
-| Rule | Condition |
-|---|---|
-| `gpa_out_of_range` | GPA > 4.5 or == 0.0 |
-| `toefl_out_of_range` | TOEFL iBT > 120 |
-| `ielts_out_of_range` | IELTS > 9.0 |
-| `gre_out_of_range` | GRE outside 130–340 |
-| `tuition_suspiciously_high` | Single fee > $100,000 |
-
-When the Agent sees a flagged chunk, it will either **re-search** with a different query, or **warn the user** in the final answer that the data may be incorrect.

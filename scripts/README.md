@@ -27,7 +27,6 @@ scripts/
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
 │   ├── multi_query.py      ← Multi-Query expansion via Gemini
 │   ├── agent.py            ← Agentic RAG: Gemini Function Calling ReAct loop
-│   ├── sanity_check.py     ← pre-LLM validator: flags implausible values (GPA, TOEFL, GRE…)
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
 └── generator/
     └── gemini.py           ← Gemini 2.5 Flash answer generation
@@ -71,7 +70,6 @@ python scripts/run.py rag "Stanford MS admission GPA" --school stanford
 
 # Agentic RAG: Gemini 自動决定搜尋次數與策略（ReAct Loop）
 python scripts/run.py agent "Compare GPA and deadline for Stanford, CMU, and MIT"
-python scripts/run.py agent "What do Reddit users say about CMU MSCS?" --max-steps 6
 ```
 
 **Flags:**
@@ -158,7 +156,6 @@ The school is inferred from the URL domain (primary) or filename (fallback) via 
 | `admissions` / `apply` | admissions | 1600 | 200 | |
 | `professor_profile` | professor_profile | 1800 | 200 | Large profile context |
 | `professor_paper` | professor_paper | 1000 | 150 | Precise paper details |
-| `reddit.com` | reddit | 900 | 150 | Short conversational posts |
 | *(anything else)* | general | 1400 | 200 | |
 
 ### Database schema (v2)
@@ -169,23 +166,6 @@ universities  →  web_pages  →  document_chunks
 ```
 
 ---
-
-## Sanity Check (Agentic RAG only)
-
-`sanity_check.py` runs automatically inside the Agent's tool executor. Before each search result is shown to the LLM, every chunk is scanned for numerically implausible values. Suspicious chunks are annotated with a ⚠️ header so the Agent knows to re-search or warn the user.
-
-| Rule | Trigger |
-|---|---|
-| `gpa_out_of_range` | GPA > 4.5 or == 0.0 (US 4.0/4.3 scale) |
-| `toefl_out_of_range` | TOEFL iBT > 120 |
-| `ielts_out_of_range` | IELTS > 9.0 |
-| `gre_out_of_range` | GRE value outside 130–340 range |
-| `tuition_suspiciously_high` | Dollar amount > $100,000 per entry |
-
-Agent response logic when a ⚠️ flag is detected:
-- **Strategy A** — Re-search with different query or `page_type='faq'` to cross-verify
-- **Strategy B** — Flag the value in the final answer: *「this figure appears implausible; please verify at [URL]」*
-- **Strategy C** — If all results are flagged, tell the user the database data may be unreliable
 
 ---
 
