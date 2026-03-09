@@ -18,12 +18,15 @@ scripts/
 │   ├── vectorize.py        ← BAAI/bge-m3 embeddings (1024-dim)
 │   ├── store.py            ← upsert helper for document_chunks
 │   └── verifier.py         ← verify chunk counts, vector dims, source URLs
+├── professor_fetcher/
+│   ├── fetcher.py          ← SerpAPI tool to search & fetch Scholar data
+│   ├── formatter.py        ← convert API data to project-standard JSON
+│   └── run_fetch.py        ← CLI: fetch single/batch professors + optional --embed
 ├── retriever/
 │   ├── search.py           ← vector search (HNSW), optional school_id/page_type filter
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
 │   ├── multi_query.py      ← Multi-Query expansion via Gemini
 │   ├── agent.py            ← Agentic RAG: Gemini Function Calling ReAct loop
-│   ├── sanity_check.py     ← pre-LLM validator: flags implausible values (GPA, TOEFL, GRE…)
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
 ├── generator/
 │   └── gemini.py           ← Gemini 2.5 Flash answer generation
@@ -46,6 +49,8 @@ scripts/
 | `python scripts/run.py verify-db` | Print table row counts (universities, web_pages, chunks) |
 | `python scripts/run.py verify-vdb` | Print chunk/vector breakdown per school & page type |
 | `python scripts/run.py export` | Write `db/exported_data.sql` summary |
+| `python -m scripts.professor_fetcher.run_fetch --name "Name" --school "School"` | Fetch professor data |
+| `python -m scripts.professor_fetcher.run_fetch --config config.json --embed` | Batch fetch + embed |
 
 ### Embedding Only
 
@@ -86,8 +91,6 @@ python scripts/evaluator/evaluator.py
 
 **Flags (search / rag / agent):**
 
-| Flag | Effect |
-|------|--------|
 | `--school cmu` | Filter retrieval to a single school (`cmu`, `caltech`, …) |
 | `--mq` | Enable Multi-Query expansion (Gemini generates 3 related queries) |
 | `--max-steps N` | Max ReAct iterations for `agent` command (default: 5) |
@@ -124,6 +127,42 @@ The dataset (`EVAL_DATASET` in `eval_runner.py`) covers **5 schools** with **12 
 | `mit` | 2 | `data/mit.json` |
 | `caltech` | 2 | `data/caltech.json` |
 | `ucla` | 2 | `data/ucla.json` |
+
+---
+
+## Professor Data Fetching (SerpAPI)
+
+Fetches a professor's research areas and recent papers from Google Scholar. Results are stored in `data/{school_id}_professors.json` and automatically integrated during `import` or `init-all`.
+
+### Setup
+1. Get a **SerpAPI Key** at [serpapi.com](https://serpapi.com).
+2. Add to `.env`: `SERPAPI_KEY=your_key`.
+
+### Usage
+Run from project root:
+
+```bash
+# Single professor (searches for author_id automatically)
+python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
+
+# Single professor + immediate embedding
+python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
+
+# Batch mode from config
+python -m scripts.professor_fetcher.run_fetch --config professors.json --embed
+
+# Format of professors.json:
+# [
+#   {"name": "Andrew Ng", "school": "Stanford", "school_id": "stanford"},
+#   {"name": "Yann LeCun", "school": "NYU", "school_id": "nyu"}
+# ]
+```
+
+**Common Flags:**
+- `--author-id "ID"`: Skip search if ID is known (e.g., `47730H0AAAAJ`).
+- `--cutoff-year 2024`: Only fetch papers from this year onwards.
+- `--max-papers 20`: Limit recent paper count.
+- `--embed`: Automatically run the embedding pipeline after fetching.
 
 ---
 
@@ -165,7 +204,8 @@ The school is inferred from the URL domain (primary) or filename (fallback) via 
 | `faq` | faq | 2000 | 200 | Q&A regex pre-split |
 | `checklist` / `requirements` | checklist | 1200 | 150 | |
 | `admissions` / `apply` | admissions | 1600 | 200 | |
-| `reddit.com` | reddit | 900 | 150 | Short conversational posts |
+| `professor_profile` | professor_profile | 1800 | 200 | Large profile context |
+| `professor_paper` | professor_paper | 1000 | 150 | Precise paper details |
 | *(anything else)* | general | 1400 | 200 | |
 
 ### Database schema (v2)
@@ -177,31 +217,15 @@ universities  →  web_pages  →  document_chunks
 
 ---
 
-## Sanity Check (Agentic RAG only)
-
-`sanity_check.py` runs automatically inside the Agent's tool executor. Before each search result is shown to the LLM, every chunk is scanned for numerically implausible values. Suspicious chunks are annotated with a ⚠️ header so the Agent knows to re-search or warn the user.
-
-| Rule | Trigger |
-|---|---|
-| `gpa_out_of_range` | GPA > 4.5 or == 0.0 (US 4.0/4.3 scale) |
-| `toefl_out_of_range` | TOEFL iBT > 120 |
-| `ielts_out_of_range` | IELTS > 9.0 |
-| `gre_out_of_range` | GRE value outside 130–340 range |
-| `tuition_suspiciously_high` | Dollar amount > $100,000 per entry |
-
-Agent response logic when a ⚠️ flag is detected:
-- **Strategy A** — Re-search with different query or `page_type='faq'` to cross-verify
-- **Strategy B** — Flag the value in the final answer: *「this figure appears implausible; please verify at [URL]」*
-- **Strategy C** — If all results are flagged, tell the user the database data may be unreliable
-
 ---
 
 ## Requirements
 
 - PostgreSQL with `pgvector` extension enabled
 - Local model files (paths set in `.env`):
-  - `BGE_EMBED_MODEL_PATH` — path to `BAAI/bge-m3` (default: `D:\DforDownload\BAAI\bge-m3`)
+  - `BGE_EMBED_MODEL_PATH` — path to `BAAI/bge-m3`
   - `BGE_RERANKER_MODEL_PATH` — path to `BAAI/bge-reranker-v2-m3`
-  - Both will auto-download from HuggingFace if the local path does not exist
+- API Keys:
+  - `GOOGLE_API_KEY` (Gemini)
+  - `SERPAPI_KEY` (Professor Fetcher)
 - Python dependencies: `pip install -r requirements.txt`
-- `.env` with `DATABASE_URL`, `GOOGLE_API_KEY`, `BGE_EMBED_MODEL_PATH`, `BGE_RERANKER_MODEL_PATH`

@@ -9,8 +9,7 @@ chunker.py — 智慧分段模組（v3）
                                若單個 Q&A 超過 2000 字元才再切分
   - checklist / requirements → chunk_size=1200（條列式英文，需保留完整條目）
   - admissions / apply      → chunk_size=1600（申請說明段落）
-  - reddit                  → chunk_size=900（口語短段落，來源為 Reddit 貼文）
-  - 其他 / 預設             → chunk_size=1400
+   - 其他 / 預設             → chunk_size=1400
 
 overlap 固定為 chunk_size * 0.2（20%），最少 150 字元，
 以確保英文長句在邊界處有足夠的上下文重疊。
@@ -26,14 +25,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # 原始資料為英文，平均每個單字約 5–6 字元 + 空格
 # chunk_size=1400 ≈ 200–250 個英文單字（約 2–3 個段落）
 _PAGE_TYPE_SIZES: dict[str, int] = {
-    "faq":          2000,   # FAQ 個別問答若超過此長度才二次切分
-    "checklist":    1200,   # 條列式資訊，保留完整條目
-    "requirements": 1200,
-    "admissions":   1600,   # 申請說明段落
-    "apply":        1600,
-    "accepting":    1400,
-    "reddit":        900,   # Reddit 口語短段落
-    "general":      1400,
+    "faq":               2000,   # FAQ 個別問答若超過此長度才二次切分
+    "checklist":         1200,   # 條列式資訊，保留完整條目
+    "requirements":      1200,
+    "admissions":        1600,   # 申請說明段落
+    "apply":             1600,
+    "accepting":         1400,
+    "professor_profile": 1800,   # 教授 Google Scholar profile（保留完整個人資訊）
+    "professor_paper":   1000,   # 單篇論文資訊（通常較短，不需太大）
+    "general":           1400,
 }
 
 _DEFAULT_CHUNK_SIZE = 1400
@@ -98,13 +98,14 @@ def infer_page_type(url: str) -> str:
     """
     從 URL 路徑推斷頁面類型。
 
-    回傳 page_type 字串，例如 'faq', 'admissions', 'general'。
-    Reddit 資料通常由 pipeline 直接傳入 page_type='reddit'，
-    此處的 URL 判斷作為備用。
+    回傳 page_type 字串，例如 'faq', 'admissions', 'professor_profile', 'general'。
     """
     url_lower = url.lower()
-    if "reddit.com" in url_lower:
-        return "reddit"
+    # Google Scholar 教授相關頁面
+    if "scholar.google.com" in url_lower:
+        if "view_op=view_citation" in url_lower:
+            return "professor_paper"    # 單篇論文 citation 頁面
+        return "professor_profile"      # 教授 profile 頁面
     if "faq" in url_lower or "frequently-asked" in url_lower:
         return "faq"
     if "checklist" in url_lower or "requirements" in url_lower:
@@ -138,7 +139,7 @@ def chunk_text(text: str, page_type: str = "general") -> list[str]:
     將長文字依 page_type 切成多個 chunk，回傳 list[str]。
 
     Args:
-        text:      原始純文字（爬取自網頁或 Reddit）
+        text:      原始純文字（爬取自網頁或檔案）
         page_type: 頁面類型，影響 chunk 策略與大小
 
     Returns:

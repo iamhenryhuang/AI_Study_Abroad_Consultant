@@ -4,3 +4,4 @@ pgvector>=0.2.0
 langchain-text-splitters>=0.3.0
 sentence-transformers>=3.0.0
 google-genai
+requests>=2.28.0

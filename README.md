@@ -4,7 +4,7 @@ RAG-based consultant for applying to North American CS master's programs. Crawls
 
 **Stack:** Gemini 2.5 Flash · `BAAI/bge-m3` embeddings · PostgreSQL + **pgvector (HNSW)** · LangChain · Cross-Encoder reranking
 
-**Flow:** Crawl URLs → store raw text → chunk by page type → embed → pgvector. Query → vector search (+ optional school filter) → rerank → Gemini answer.
+**Flow:** Crawl URLs or fetch professor data (SerpAPI) → store raw text as JSON → chunk by page type → embed → pgvector. Query → vector search (+ optional school filter) → rerank → Gemini answer.
 
 ---
 
@@ -34,7 +34,8 @@ scripts/
   run.py                ← unified entry point
   db/                   ← connection, setup, import/export
   embedder/             ← chunker, pipeline, vectorize, store, verifier
-  retriever/            ← search, reranker, multi_query, rag_pipeline, agent, sanity_check
+  professor_fetcher/    ← SerpAPI-based professor profile & paper scraper
+  retriever/            ← search, reranker, multi_query, rag_pipeline, agent
   generator/            ← Gemini answer generation
   evaluator/
     evaluator.py        ← RAGEvaluator class (Recall@k, Context Precision/Recall, F1)
@@ -84,6 +85,17 @@ python scripts/evaluator/evaluator.py                # unit-test metric definiti
 
 # Export SQL summary
 python scripts/run.py export
+
+# --- New: Professor Profiling (SerpAPI) ---
+
+# Fetch a professor's research areas & recent papers (stores to data/*_professors.json)
+python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
+
+# Fetch AND directly chunk + embed + store to DB
+python -m scripts.professor_fetcher.run_fetch --name "Yann LeCun" --school "NYU" --embed
+
+# Batch mode from a JSON config
+python -m scripts.professor_fetcher.run_fetch --config scripts/professor_fetcher/professors_example.json --embed
 ```
 
 ---
@@ -97,21 +109,9 @@ Chunks are sized for **English text** (~5–6 chars/word). FAQ pages use a regex
 | `faq` | faq | 2000 chars (Q&A pre-split) | 200 |
 | `checklist` / `requirements` | checklist | 1200 chars | 150 |
 | `admissions` / `apply` | admissions | 1600 chars | 200 |
-| `reddit.com` | reddit | 900 chars | 150 |
+| `professor_profile` (from Scholar) | professor_profile | 1800 chars | 200 |
+| `professor_paper` (from Scholar) | professor_paper | 1000 chars | 150 |
 | anything else | general | 1400 chars | 200 |
 
 ---
 
-## Sanity Check (Agentic RAG only)
-
-Before retrieved chunks are passed to the Agent, `sanity_check.py` automatically scans each chunk for implausible numerical values and annotates suspicious ones with a ⚠️ flag.
-
-| Rule | Condition |
-|---|---|
-| `gpa_out_of_range` | GPA > 4.5 or == 0.0 |
-| `toefl_out_of_range` | TOEFL iBT > 120 |
-| `ielts_out_of_range` | IELTS > 9.0 |
-| `gre_out_of_range` | GRE outside 130–340 |
-| `tuition_suspiciously_high` | Single fee > $100,000 |
-
-When the Agent sees a flagged chunk, it will either **re-search** with a different query, or **warn the user** in the final answer that the data may be incorrect.

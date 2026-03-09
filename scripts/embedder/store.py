@@ -2,7 +2,7 @@
 store.py — 向量存入 DB 的輕量包裝（v2）
 
 注意：v2 主要邏輯已移入 pipeline.py 的 upsert_chunks()。
-此模組保留供其他腳本（如 reddit_pipeline.py）呼叫使用。
+此模組保留供其他腳本呼叫使用。
 """
 
 from __future__ import annotations
