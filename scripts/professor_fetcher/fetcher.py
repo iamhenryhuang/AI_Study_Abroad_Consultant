@@ -1,22 +1,16 @@
 """
-fetcher.py — SerpAPI Google Scholar 教授資料抓取模組（重設計版）
+fetcher.py — SerpAPI Google Scholar 教授資料抓取模組
 
-根據實際測試，SerpAPI 的 engine 可用性如下：
-  - google_scholar          正常（搜尋論文）
-  - google_scholar_author   回傳空資料（可能被擋）
-  - google_scholar_profiles 已停用（400 + "discontinued"）
-
-因此本模組改用以下策略：
-  1. search_professor_id()  — 用 google_scholar engine 搜尋 "{name} {school}" ，
-                              從論文結果的 publication_info.authors[].link 中取出 author_id
-  2. fetch_papers_by_search() — 繼續用 google_scholar 搜尋該教授的論文，
-                                 過濾近兩年的結果
-  3. fetch_author_profile()   — 嘗試用 google_scholar_author engine；
-                                 若失敗則從搜尋結果組合 profile
+搜尋策略（已簡化）：
+  1. search_professor_id()       — 用 google_scholar engine 搜尋 "{name}" "{school}"，
+                                   從論文結果的 publication_info.authors[].link 中取出 author_id
+  2. fetch_recent_papers()       — 搜尋該教授的近兩年論文，過濾年份
+  3. fetch_author_profile()      — 返回基本的 author_id metadata（節省 API 配額）
+  4. fetch_school_cs_professors() — 搜尋學校全體教授（不限定學科）
 
 環境變數：
   SERPAPI_KEY — SerpAPI 的 API Key（必填）
-  申請：https://serpapi.com（每月 250 次免費）
+  申請：https://serpapi.com（每月 100 次免費試用額度）
 """
 
 from __future__ import annotations
@@ -117,19 +111,24 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
     透過 google_scholar engine 搜尋教授論文，從論文的 author 連結提取 author_id。
 
     搜尋策略：
-      - 使用 q="{name}" {affiliation} 搜尋
+      - 使用 q="{name}" {school_name} 組合搜尋（不限定特定學科）
       - 掃描前 10 筆論文的 publication_info.authors
       - 找名字最接近 {name} 的 author，取其 Google Scholar link 中的 user= 參數
 
     Args:
         name:        教授全名，例如 "Andrew Ng"
-        affiliation: 學校關鍵字，例如 "Stanford"
+        affiliation: 學校名稱或關鍵字，例如 "Stanford University"
 
     Returns:
         Google Scholar author_id 或 None
     """
-    query = f'"{name}" {affiliation}'.strip()
-    print(f'  搜尋：{query!r}')
+    # 組合查詢：教授名字 + 學校名稱（不含任何學科限制）
+    if affiliation:
+        query = f'"{name}" "{affiliation}"'
+    else:
+        query = f'"{name}"'
+    
+    print(f'  搜尋：{query!r}（名字+學校）')
 
     try:
         params = {
@@ -193,6 +192,75 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
         print(f"取得 URL 中的 user=XXXXXX，然後用 --author-id 參數傳入")
 
     return best_id
+
+
+def fetch_school_cs_professors(school: str, limit: int = None) -> list[dict[str, Any]]:
+    """
+    透過 Google Scholar 網站搜尋尋找指定學校的教授。
+    搜尋 query: site:scholar.google.com/citations?user= "{school}"
+    
+    （改為只按學校搜尋，不限制科系，避免遺漏跨領域教授）
+
+    Args:
+        school: 學校名稱，例如 "Stanford University"
+        limit: 最多抓取幾位教授，測試時可設較小數值避免超過額度
+
+    Returns:
+        list of dict，每個 dict 包含:
+          - name: 教授名稱
+          - author_id: Google Scholar author_id
+          - snippet: 搜尋結果的 snippet（可能包含研究領域等）
+    """
+    # 改為只用學校名稱搜尋，不限制 "Computer Science"
+    query = f'site:scholar.google.com/citations?user= "{school}"'
+    print(f"  搜尋 {school} 的教授（按名字+學校）：{query!r}")
+
+    professors = []
+    
+    # 這裡我們只抓第一頁（或前幾頁）的結果，使用 num=20 來一次取得盡量多
+    try:
+        params = {
+            "engine": "google",
+            "q": query,
+            "hl": "en",
+            "num": limit if limit and limit <= 100 else 100, # 預設一頁最多抓 100 筆
+        }
+        data = _get(params)
+    except Exception as e:
+        print(f"學校教授搜尋失敗：{e}")
+        return []
+
+    organic = data.get("organic_results", [])
+    if not organic:
+        print("搜尋無結果")
+        return []
+
+    for result in organic:
+        title = result.get("title", "")
+        # 通常 Google 搜尋結果的 title 會是 "Name - Google Scholar" 或附帶其它資訊
+        # 我們假設 title 第一部分就是名字
+        name = title.split(" -")[0].strip()
+        
+        link = result.get("link", "")
+        author_id = _extract_author_id_from_url(link)
+        
+        if not author_id:
+            continue
+            
+        snippet = result.get("snippet", "")
+        
+        professors.append({
+            "name": name,
+            "author_id": author_id,
+            "snippet": snippet,
+        })
+        
+        if limit and len(professors) >= limit:
+            break
+            
+    print(f"  找到 {len(professors)} 位教授。")
+    return professors
+
 
 
 # ── 主要功能：取得教授 profile ────────────────────────────────────────────────
