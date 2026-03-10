@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 search.py — 向量檢索模組（v2）
 
@@ -11,6 +12,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+
+# 修復 Windows 控制台 UTF-8 輸出
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # 讓 scripts 目錄在 path 中
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -154,7 +160,7 @@ def run_search(
 
         print(
             f"【結果 {i}】 {score_str}\n"
-            f"  學校    : {res['university_name']} ({res['school_id']})\n"
+            f"  學校: {res['university_name']} ({res['school_id']})\n"
             f"  頁面類型: {res.get('page_type', 'unknown')}\n"
             f"  來源 URL: {res.get('source_url', 'N/A')}\n"
             f"  內容摘要: {res['chunk_text'].strip()[:500]}...\n"

@@ -80,6 +80,7 @@ python scripts/run.py export
 # --- New: Professor Profiling (SerpAPI) ---
 
 # Fetch a professor's research areas & recent papers (stores to data/*_professors.json)
+# Search uses name + school (no field restriction)
 python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
 
 # Fetch AND directly chunk + embed + store to DB
@@ -87,6 +88,9 @@ python -m scripts.professor_fetcher.run_fetch --name "Yann LeCun" --school "NYU"
 
 # Batch mode from a JSON config
 python -m scripts.professor_fetcher.run_fetch --config scripts/professor_fetcher/professors_example.json --embed
+
+# Fetch ALL professors for a school
+python -m scripts.professor_fetcher.run_fetch --match-school --school "Stanford University"
 ```
 
 ---

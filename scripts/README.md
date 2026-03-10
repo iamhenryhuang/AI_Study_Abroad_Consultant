@@ -46,7 +46,8 @@ scripts/
 | `python scripts/run.py verify-db` | Print table row counts (universities, web_pages, chunks) |
 | `python scripts/run.py verify-vdb` | Print chunk/vector breakdown per school & page type |
 | `python scripts/run.py export` | Write `db/exported_data.sql` summary |
-| `python -m scripts.professor_fetcher.run_fetch --name "Name" --school "School"` | Fetch professor data |
+| `python -m scripts.professor_fetcher.run_fetch --name "Name" --school "School"` | Fetch single professor data |
+| `python -m scripts.professor_fetcher.run_fetch --match-school --school "School"` | Fetch all CS professors for a school |
 | `python -m scripts.professor_fetcher.run_fetch --config config.json --embed` | Batch fetch + embed |
 
 ### Embedding Only
@@ -92,8 +93,11 @@ Fetches a professor's research areas and recent papers from Google Scholar. Resu
 Run from project root:
 
 ```bash
-# Single professor (searches for author_id automatically)
+# Single professor (searches by name + school)
 python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
+
+# Fetch ALL professors for a specific school
+python -m scripts.professor_fetcher.run_fetch --match-school --school "Stanford University"
 
 # Single professor + immediate embedding
 python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
@@ -109,8 +113,10 @@ python -m scripts.professor_fetcher.run_fetch --config professors.json --embed
 ```
 
 **Common Flags:**
+- `--match-school`: Triggers fetching all professors for the specified `--school`.
 - `--author-id "ID"`: Skip search if ID is known (e.g., `47730H0AAAAJ`).
 - `--cutoff-year 2024`: Only fetch papers from this year onwards.
+- `--limit 10`: Limit number of professors fetched in `--match-school` mode (useful for testing to save API keys).
 - `--max-papers 20`: Limit recent paper count.
 - `--embed`: Automatically run the embedding pipeline after fetching.
 

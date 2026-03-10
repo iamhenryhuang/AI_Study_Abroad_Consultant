@@ -2,30 +2,19 @@
 run_fetch.py — 教授 Google Scholar 資料抓取 CLI 入口
 
 功能：
-  1. 從指定學校抓取教授的研究領域與近兩年論文
-  2. 格式化成與 /data/*.json 完全相容的格式：{ "url": "純文字" }
-  3. 可選擇：
-     a) 輸出為 JSON 檔案存入 /data/
-     b) 直接跑 pipeline 寫入資料庫（chunk + embed + store）
+  抓取單一教授的 Google Scholar 資料：研究領域與近兩年論文
+  格式化成與 /data/*.json 完全相容的格式：{ "url": "純文字" }
+  可選擇直接跑 embedding pipeline 寫入資料庫（chunk + embed + store）
 
 使用方式：
-  # 方式一：直接指定教授姓名與學校（互動）
+  # 基本用法：指定教授名字與學校
   python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
 
-  # 方式二：批次模式（從 JSON 設定檔讀入）
-  python -m scripts.professor_fetcher.run_fetch --config professors.json
-
-  # 方式三：抓完後直接入庫（不存 JSON）
+  # 附加 --embed 選項可直接入庫
   python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
 
-  # 方式四：指定已知的 author_id（跳過搜尋步驟）
+  # 若已知 author_id 可略過搜尋
   python -m scripts.professor_fetcher.run_fetch --author-id "47730H0AAAAJ" --school "Stanford"
-
-設定檔格式 (professors.json)：
-  [
-    {"name": "Andrew Ng",    "school": "Stanford University",       "school_id": "stanford"},
-    {"name": "Yann LeCun",   "school": "New York University",       "school_id": "nyu"}
-  ]
 
 環境變數（需在 .env 中設定）：
   SERPAPI_KEY   — SerpAPI 的 API Key
@@ -196,76 +185,6 @@ def run_pipeline_on_file(json_path: Path) -> None:
     run_pipeline(data_dirname=str(data_dir.relative_to(ROOT_DIR)))
 
 
-# ── 批次設定檔模式 ────────────────────────────────────────────────────────────
-
-def run_from_config(config_path: Path, embed: bool = False, **kwargs) -> None:
-    """從 JSON 設定檔批次抓取多位教授。"""
-    config_data = json.loads(config_path.read_text(encoding="utf-8"))
-    if not isinstance(config_data, list):
-        print("錯誤：設定檔格式應為 list of {name, school, school_id?}。")
-        return
-
-    # 按學校分組，最後各自合併成一個 JSON
-    school_results: dict[str, dict[str, str]] = {}
-
-    for entry in config_data:
-        name = entry.get("name", "")
-        school = entry.get("school", "")
-        school_id = entry.get("school_id", "") or _infer_school_id(school)
-        author_id = entry.get("author_id", "")
-
-        if not name or not school:
-            print(f"跳過無效 entry：{entry}")
-            continue
-
-        result = fetch_one_professor(
-            name=name,
-            school=school,
-            school_id=school_id,
-            author_id=author_id,
-            **kwargs,
-        )
-        if result:
-            if school_id not in school_results:
-                school_results[school_id] = {}
-            school_results[school_id].update(result)
-
-    # 儲存結果
-    for sid, data in school_results.items():
-        json_path = save_to_json(data, sid, DATA_DIR)
-        if embed:
-            run_pipeline_on_file(json_path)
-
-
-# ── 單一教授模式 ─────────────────────────────────────────────────────────────
-
-def run_single(
-    name: str,
-    school: str,
-    school_id: str = "",
-    author_id: str = "",
-    embed: bool = False,
-    **kwargs,
-) -> None:
-    """抓取單一教授並儲存/入庫。"""
-    sid = school_id or _infer_school_id(school)
-
-    result = fetch_one_professor(
-        name=name,
-        school=school,
-        school_id=sid,
-        author_id=author_id,
-        **kwargs,
-    )
-    if not result:
-        print("未取得任何資料，結束。")
-        return
-
-    json_path = save_to_json(result, sid, DATA_DIR)
-    if embed:
-        run_pipeline_on_file(json_path)
-
-
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -274,7 +193,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例：
-  # 抓取單一教授（輸出 JSON）
+  # 基本用法
   python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford University"
 
   # 指定已知的 author_id（跳過搜尋）
@@ -282,22 +201,12 @@ def main() -> None:
 
   # 抓完後直接 chunk + embed + 入庫
   python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
-
-  # 批次模式（從設定檔）
-  python -m scripts.professor_fetcher.run_fetch --config professors_list.json
-
-  # 批次 + 入庫
-  python -m scripts.professor_fetcher.run_fetch --config professors_list.json --embed
         """,
     )
 
-    # 互斥群組：單一教授模式 / 批次設定檔
-    mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument("--name", type=str, help="教授全名（單一模式）")
-    mode_group.add_argument("--config", type=str, help="JSON 設定檔路徑（批次模式）")
-
-    parser.add_argument("--author-id", type=str, default="", help="Google Scholar author_id（單一模式可選，傳入此值可跳過搜尋）")
-    parser.add_argument("--school", type=str, default="", help="學校名稱（單一模式必填）")
+    parser.add_argument("--name", type=str, required=True, help="教授全名")
+    parser.add_argument("--school", type=str, required=True, help="學校名稱")
+    parser.add_argument("--author-id", type=str, default="", help="Google Scholar author_id（可選，傳入此值可跳過搜尋）")
     parser.add_argument("--school-id", type=str, default="", help="學校 ID（可選，例如 stanford、cmu）")
     parser.add_argument(
         "--cutoff-year",
@@ -315,34 +224,31 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    kwargs = {
-        "cutoff_year": args.cutoff_year,
-        "max_papers":  args.max_papers,
-        "delay":       args.delay,
-    }
+    if not args.school:
+        print("錯誤：必須指定 --school（學校名稱）")
+        sys.exit(1)
 
-    if args.config:
-        config_path = Path(args.config)
-        if not config_path.exists():
-            print(f"找不到設定檔：{config_path}")
-            sys.exit(1)
-        run_from_config(config_path, embed=args.embed, **kwargs)
-    else:
-        # 單一教授模式（--name）
-        if not args.school:
-            print("錯誤：必須同時指定 --school（學校名稱）")
-            sys.exit(1)
-        run_single(
-            name=args.name,
-            school=args.school,
-            school_id=args.school_id,
-            author_id=args.author_id,
-            embed=args.embed,
-            **kwargs,
-        )
+    sid = args.school_id or _infer_school_id(args.school)
+
+    result = fetch_one_professor(
+        name=args.name,
+        school=args.school,
+        school_id=sid,
+        author_id=args.author_id,
+        cutoff_year=args.cutoff_year,
+        max_papers=args.max_papers,
+        delay=args.delay,
+    )
+
+    if not result:
+        print("未取得任何資料，結束。")
+        sys.exit(1)
+
+    json_path = save_to_json(result, sid, DATA_DIR)
+    
+    if args.embed:
+        run_pipeline_on_file(json_path)
 
 
 if __name__ == "__main__":
     main()
-
-
