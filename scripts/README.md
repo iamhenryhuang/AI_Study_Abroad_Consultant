@@ -96,9 +96,6 @@ Run from project root:
 # Single professor (searches by name + school)
 python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
 
-# Fetch ALL professors for a specific school
-python -m scripts.professor_fetcher.run_fetch --match-school --school "Stanford University"
-
 # Single professor + immediate embedding
 python -m scripts.professor_fetcher.run_fetch --name "Fei-Fei Li" --school "Stanford" --embed
 

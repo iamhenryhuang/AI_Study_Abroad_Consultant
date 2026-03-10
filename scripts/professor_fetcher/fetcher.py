@@ -56,7 +56,8 @@ def _get(params: dict) -> dict:
 
     for attempt in range(3):
         try:
-            resp = requests.get(SERPAPI_BASE, params=all_params, timeout=30)
+            # 增加超時時間到 120 秒以應對 SerpAPI 伺服器響應慢的情況
+            resp = requests.get(SERPAPI_BASE, params=all_params, timeout=120)
 
             if resp.status_code == 400:
                 try:
@@ -84,7 +85,8 @@ def _get(params: dict) -> dict:
             if attempt == 2:
                 raise
             print(f"  [retry {attempt + 1}/3] 網路錯誤：{e}")
-            time.sleep(2 ** attempt)
+            # 重試時增加更長的等待時間（4秒、8秒）
+            time.sleep(min(2 ** (attempt + 1), 10))
 
     return {}
 
@@ -114,6 +116,7 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
       - 使用 q="{name}" {school_name} 組合搜尋（不限定特定學科）
       - 掃描前 10 筆論文的 publication_info.authors
       - 找名字最接近 {name} 的 author，取其 Google Scholar link 中的 user= 參數
+      - 警告：對於常見名字（如"xiao long wang"），建議多出現同名人，建議手動指定 author_id
 
     Args:
         name:        教授全名，例如 "Andrew Ng"
@@ -148,10 +151,11 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
         return None
 
     # 建立姓名關鍵字集（用於比對）
-    name_parts = set(name.lower().split())
+    name_parts = name.lower().split()
 
     best_id = None
     best_score = 0
+    candidates = []  # 保存所有候選人
 
     for result in organic:
         pub_info = result.get("publication_info", {})
@@ -168,14 +172,31 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
             if not author_id:
                 continue
 
-            # 計算名字匹配分數（縮寫也算分）
-            author_parts = set(author_name.lower().split("."))
-            author_parts.update(author_name.lower().split())
+            # 更嚴格的名字匹配：計算編輯距離並檢查主要部分是否相符
+            author_parts = author_name.lower().split()
+            
+            # 計算匹配分數：完全詞匹配優先，部分匹配次之
             score = 0
+            matched_parts = 0
             for np in name_parts:
                 for ap in author_parts:
-                    if np == ap or (len(np) > 1 and np[0] == ap[0] and len(ap) == 1):
-                        score += 1
+                    if np == ap:
+                        score += 2  # 完全匹配
+                        matched_parts += 1
+                    elif len(np) > 2 and len(ap) > 2 and np[0] == ap[0]:
+                        score += 1  # 首字母匹配
+            
+            # 過濾：必須至少匹配 name_parts 的 2/3 以上
+            min_matches = max(2, len(name_parts) // 2)
+            if matched_parts < min_matches and score < len(name_parts):
+                continue  # 匹配度太低，跳過
+            
+            candidates.append({
+                "name": author_name,
+                "id": author_id,
+                "score": score,
+            })
+            
             if score > best_score:
                 best_score = score
                 best_id = author_id
@@ -185,6 +206,14 @@ def search_professor_id(name: str, affiliation: str = "") -> str | None:
                 )
 
     if best_id:
+        # 如果有多個高分候選，提示用戶
+        high_score_candidates = [c for c in candidates if c["score"] >= best_score - 1]
+        if len(high_score_candidates) > 1:
+            print(f"\n⚠️  警告：發現多位同分或接近分數的候選人，可能存在同名人員")
+            for c in high_score_candidates:
+                print(f"    - {c['name']} (score={c['score']}, id={c['id']})")
+            print(f"  若非預期人員，建議使用 --author-id 手動指定")
+        
         print(f"選定 author_id={best_id}")
     else:
         print(f"無法從搜尋結果中找到 {name!r} 的 author_id")
