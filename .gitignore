@@ -1,0 +1,10 @@
+# 忽略 Python 暫存
+__pycache__/
+*.py[cod]
+
+# 忽略環境變數與資料庫
+.env
+db/
+
+# 忽略特定 cache 資料夾
+.cache/
