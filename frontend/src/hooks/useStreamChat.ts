@@ -86,5 +86,6 @@ export function useStreamChat() {
     messages,
     isStreaming: mutation.isPending,
     sendMessage: (query: string) => mutation.mutate(query),
+    clearChat: () => setMessages([]),
   }
 }

@@ -51,7 +51,7 @@ export function MessageBubble({ message }: Props) {
             </div>
           ) : (
             <div
-              className={`text-[15px] leading-relaxed tracking-wide prose prose-sm max-w-none prose-p:my-1.5 prose-a:text-indigo-600 prose-a:no-underline hover:prose-a:underline prose-li:my-0.5 ${
+              className={`text-[15px] leading-relaxed tracking-wide prose prose-sm max-w-none prose-p:my-1.5 prose-a:text-indigo-600 prose-a:text-[12px] prose-a:no-underline hover:prose-a:underline prose-li:my-0.5 break-words ${
                 message.error ? 'text-red-500' : 'text-gray-800'
               }`}
             >

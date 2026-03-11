@@ -34,6 +34,7 @@
   .glass {
     @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-sm;
   }
+  
   .bg-mesh {
     background-color: #f8fafc;
     background-image: 
