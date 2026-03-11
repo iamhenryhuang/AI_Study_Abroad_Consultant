@@ -166,6 +166,17 @@ CMU: GPA 要求...、截止日期...、其他...
 - 排版層次：使用「1. [研究領域名]」加「內容描述」的方式。內容應分點呈現，段落間保持清晰。
 """
 
+# ── SSE 事件輔助函式 ──────────────────────────────────────────────
+
+def _emit(on_event, event: dict) -> None:
+    """安全地觸發 SSE 事件回調（若 on_event 為 None 則略過）。"""
+    if on_event:
+        try:
+            on_event(event)
+        except Exception:
+            pass
+
+
 # ── 工具執行器 ─────────────────────────────────────────────────────
 
 def _execute_tool(name: str, args: dict) -> str:
@@ -209,6 +220,7 @@ def run_agent(
     query: str,
     max_steps: int = 5,
     verbose: bool = True,
+    on_event=None,
 ) -> str | None:
     """
     執行 Agentic RAG 流程（ReAct Loop）。
@@ -217,6 +229,7 @@ def run_agent(
         query:     使用者問題
         max_steps: 最大搜尋迭代次數（超過後強制生成回答）
         verbose:   是否印出每步驟的推理過程
+        on_event:  回調函數，接收 {"type": "thinking"|"tool_call"|"tool_result"|"answer"|"error", ...}
 
     Returns:
         最終回答字串，或 None（失敗時）
@@ -245,6 +258,7 @@ def run_agent(
 
         if verbose:
             print(f"\n[Agent] 第 {step} 輪推理...")
+        _emit(on_event, {"type": "thinking", "step": step})
 
         # 呼叫 Gemini（帶工具）
         response = client.models.generate_content(
@@ -278,6 +292,7 @@ def run_agent(
             if verbose:
                 print(f"\n[Agent] 生成最終回答（共 {step} 輪搜尋）")
                 print(f"{'='*60}\n")
+            _emit(on_event, {"type": "answer", "text": final_answer})
             return final_answer
 
         # ── 情況 B：有工具呼叫 → 執行並回饋結果 ───────────────────
@@ -290,6 +305,7 @@ def run_agent(
             if verbose:
                 args_display = json.dumps(tool_args, ensure_ascii=False)
                 print(f"  → 呼叫工具：{tool_name}({args_display})")
+            _emit(on_event, {"type": "tool_call", "tool": tool_name, "args": tool_args})
 
             # 執行工具
             tool_result = _execute_tool(tool_name, tool_args)
@@ -300,6 +316,7 @@ def run_agent(
             if verbose:
                 preview = tool_result[:200].replace("\n", " ")
                 print(f"  ← 結果預覽：{preview}...")
+            _emit(on_event, {"type": "tool_result", "tool": tool_name, "preview": tool_result[:200]})
 
             tool_response_parts.append(
                 types.Part(
@@ -342,4 +359,5 @@ def run_agent(
         print(f"[Agent] 完成（共 {max_steps} 輪，強制停止）")
         print(f"{'='*60}\n")
 
+    _emit(on_event, {"type": "answer", "text": final_answer})
     return final_answer

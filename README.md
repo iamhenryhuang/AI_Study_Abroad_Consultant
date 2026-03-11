@@ -70,7 +70,7 @@ python scripts/run.py search "Caltech PhD funding" --school caltech
 python scripts/run.py rag "What are CMU MSCS requirements?"
 python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
 
-# Agentic RAG (ReAct Loop — 自動决定搜尋次數與策略)
+# Agentic RAG (ReAct Loop — automatically decides search steps & strategy)
 python scripts/run.py agent "Compare GPA requirements and deadlines for Stanford, CMU and MIT"
 python scripts/run.py agent "What do admitted students say about the CMU MSCS interview?" --max-steps 6
 
@@ -91,6 +91,76 @@ python -m scripts.professor_fetcher.run_fetch --config scripts/professor_fetcher
 
 # Fetch ALL professors for a school
 python -m scripts.professor_fetcher.run_fetch --match-school --school "Stanford University"
+```
+
+---
+
+## Running Frontend & Backend
+
+This project includes a **React Vite frontend** and **FastAPI SSE backend** for real-time Agent reasoning visualization.
+
+### Prerequisites
+
+Install all dependencies (including FastAPI & uvicorn):
+
+```bash
+pip install -r requirements.txt
+cd frontend && npm install
+```
+
+### Starting Services (Development Mode)
+
+**Terminal 1 - Start Backend Server**:
+
+```bash
+uvicorn api:app --reload --port 8000
+```
+
+Expected output:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000
+INFO:     Application startup complete.
+```
+
+**Terminal 2 - Start Frontend Dev Server**:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Expected output:
+```
+VITE v7.3.1  Local:   http://localhost:5173/
+```
+
+Open **`http://localhost:5173`** to use the web interface.
+
+### Quick API Test
+
+To verify the backend is working:
+
+```bash
+python test_api.py
+```
+
+This command tests the `/api/health` endpoint and `/api/chat` SSE streaming.
+
+### Production Build
+
+**Frontend Build**:
+
+```bash
+cd frontend
+npm run build
+```
+
+Output in `frontend/dist/` ready for deployment.
+
+**Backend Deployment**:
+
+```bash
+gunicorn -w 1 -k uvicorn.workers.UvicornWorker api:app --bind 0.0.0.0:8000
 ```
 
 ---
