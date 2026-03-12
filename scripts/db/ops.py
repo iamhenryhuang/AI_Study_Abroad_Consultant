@@ -12,7 +12,7 @@ ops.py — 資料庫操作集合（v2）
 import json
 from datetime import datetime
 
-import psycopg2
+import psycopg
 
 from .connection import DATABASE_URL, ROOT, get_connection
 
@@ -51,7 +51,7 @@ def setup_db():
     postgres_url = urlunparse(parsed._replace(path="/postgres"))
     try:
         print(f"連線至: {postgres_url.split('@')[-1]}")
-        conn = psycopg2.connect(postgres_url)
+        conn = psycopg.connect(postgres_url)
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
@@ -157,7 +157,7 @@ def verify():
         conn.close()
         print("\n驗證通過：資料已存在於資料庫。")
         return True
-    except psycopg2.ProgrammingError as e:
+    except psycopg.ProgrammingError as e:
         print(f"資料表不存在或結構錯誤: {e}")
         print("請先執行: python scripts/run.py import")
         return False

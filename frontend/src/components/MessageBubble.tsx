@@ -1,4 +1,4 @@
-import { User, Sparkles } from 'lucide-react'
+import { Sparkles, User } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Message } from '../types'
@@ -6,18 +6,19 @@ import { AgentSteps } from './AgentSteps'
 
 interface Props {
   message: Message
+  isLast?: boolean
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, isLast }: Props) {
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end animate-fade-in-up w-full">
-        <div className="flex gap-4 max-w-[85%] sm:max-w-[75%] items-start justify-end">
-          <div className="bg-white/80 backdrop-blur-sm text-gray-800 rounded-3xl rounded-tr-sm px-5 py-3.5 text-sm leading-relaxed shadow-sm border border-gray-100 order-1">
+      <div className="flex justify-end w-full py-4 px-4 sm:px-0">
+        <div className="max-w-3xl w-full flex justify-end gap-3 sm:gap-4 overflow-hidden items-end sm:items-start pr-2">
+          <div className="bg-[#f4f4f4] text-gray-800 rounded-3xl px-5 py-3 text-[15px] leading-relaxed max-w-[85%] wrap-break-word">
             {message.text}
           </div>
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0 order-2 overflow-hidden border border-gray-300">
-            <User size={16} className="text-gray-500" strokeWidth={2.5} />
+          <div className="w-8 h-8 rounded-full border border-gray-200 bg-white flex flex-col items-center justify-center shrink-0 ml-1">
+            <User size={16} className="text-gray-500" strokeWidth={2} />
           </div>
         </div>
       </div>
@@ -25,35 +26,26 @@ export function MessageBubble({ message }: Props) {
   }
 
   return (
-    <div className="flex justify-start animate-fade-in-up w-full group">
-      <div className="flex gap-4 max-w-[95%] sm:max-w-[85%] items-start">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center shrink-0 shadow-md">
-           <Sparkles size={14} className="text-white" strokeWidth={2.5} />
+    <div className={`flex justify-center w-full group py-6 px-4 sm:px-0 ${!isLast ? 'border-b border-gray-100/50' : ''}`}>
+      <div className="max-w-3xl w-full flex gap-4 md:gap-6 items-start overflow-hidden">
+        {/* Flat minimal AI Avatar */}
+        <div className="w-8 h-8 rounded-full border border-gray-200 bg-white flex flex-col items-center justify-center shrink-0 mt-0.5">
+          <Sparkles size={14} className="text-gray-700" strokeWidth={2} />
         </div>
-        
-        <div className="flex-1 space-y-3 pt-1">
+
+        <div className="flex-1 space-y-4 pt-1 min-w-0">
           <AgentSteps events={message.events} />
 
           {message.loading && !message.text ? (
-            <div className="flex gap-1.5 items-center h-6 px-1">
-              <span
-                className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
-                style={{ animationDelay: '0ms' }}
-              />
-              <span
-                className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
-                style={{ animationDelay: '150ms' }}
-              />
-              <span
-                className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"
-                style={{ animationDelay: '300ms' }}
-              />
+            <div className="flex gap-1.5 items-center h-6">
+              <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           ) : (
             <div
-              className={`text-[15px] leading-relaxed tracking-wide prose prose-sm max-w-none prose-p:my-1.5 prose-a:text-indigo-600 prose-a:text-[12px] prose-a:no-underline hover:prose-a:underline prose-li:my-0.5 break-words ${
-                message.error ? 'text-red-500' : 'text-gray-800'
-              }`}
+              className={`text-[15px] leading-relaxed tracking-normal prose prose-sm max-w-none prose-p:my-3 prose-p:leading-7 prose-a:text-blue-600 prose-a:font-medium hover:prose-a:underline prose-a:no-underline prose-li:my-1 prose-headings:font-semibold prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-200 prose-pre:text-gray-800 wrap-break-word ${message.error ? 'text-red-500' : 'text-gray-800'
+                }`}
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {message.text}

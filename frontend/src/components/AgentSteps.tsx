@@ -50,13 +50,13 @@ export function AgentSteps({ events }: Props) {
               return (
                 <div key={i} className="flex gap-4 items-start py-2 animate-slide-down">
                   <div className="relative z-10 w-[18px] h-[18px] rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center -ml-[4px] shadow-[0_0_0_4px_white]">
-                     <Icon size={10} strokeWidth={3} />
+                    <Icon size={10} strokeWidth={3} />
                   </div>
                   <div className="flex-1 bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold text-gray-700 text-xs">{toolInfo.label}</span>
                     </div>
-                    
+
                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                       {event.args.query && (
                         <span className="text-gray-500 text-xs bg-gray-50 px-2 py-1 rounded truncate max-w-[200px]" title={event.args.query}>

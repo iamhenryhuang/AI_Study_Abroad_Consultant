@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-import psycopg2
+import psycopg
 from dotenv import load_dotenv
 
 # 專案根目錄（scripts/db/ -> 上兩層）
@@ -16,7 +16,7 @@ def get_connection():
     if not DATABASE_URL:
         return None
     try:
-        return psycopg2.connect(DATABASE_URL)
+        return psycopg.connect(DATABASE_URL)
     except Exception as e:
         print(f"連線錯誤: {e}")
         return None

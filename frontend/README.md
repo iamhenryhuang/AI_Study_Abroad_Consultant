@@ -1,73 +1,59 @@
-# React + TypeScript + Vite
+# Study Abroad Consultant — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the React + Vite frontend for the Study Abroad RAG Consultant project. It provides a clean, professional, **ChatGPT-style** web interface for users to interact with the Agentic RAG backend.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **ChatGPT-Style UI/UX**: Minimalist, flat design with a document-centric layout. Wide input bar locked to the bottom, clear and prominent markdown-rendered text.
+- **Session Management**: Chat sessions are persisted in the browser's `localStorage` to retain context across reloads. Includes a "New Chat" button and a sidebar history panel.
+- **Server-Sent Events (SSE)**: Uses real-time streaming to display AI typing effects and step-by-step reasoning processes (Agent Tool calls).
+- **Markdown Rendering**: Robust rendering for structured tables, lists, and bolded text formatting.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Framework**: [React 18](https://react.dev/) + [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Markdown**: `react-markdown` + `remark-gfm`
+- **Data Fetching/Mutation**: `@tanstack/react-query`
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. Make sure you have installed the root backend dependencies and are running the FastAPI backend via `uvicorn api:app --reload --port 8000`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+2. Install frontend dependencies:
+   ```bash
+   cd frontend
+   npm install
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+3. Start the Vite dev server:
+   ```bash
+   npm run dev
+   ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+4. Open `http://localhost:5173` in your browser.
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── ChatInput.tsx       # Bottom input textarea mirroring ChatGPT
+│   │   ├── MessageBubble.tsx   # Displays user and assistant messages with markdown
+│   │   ├── AgentSteps.tsx      # Renders backend ReAct tool calls and thinking processes
+│   │   └── SettingsModal.tsx   # Settings configuration
+│   ├── hooks/
+│   │   └── useStreamChat.ts    # Manages SSE streaming and localStorage session history
+│   ├── types.ts                # TypeScript interfaces (AgentEvent, Message, ChatSession)
+│   ├── App.tsx                 # Main application layout and sidebar
+│   ├── index.css               # Global Tailwind directives
+│   └── main.tsx                # Entry point
+├── vite.config.ts              # Vite config (proxies /api to port 8000)
+└── package.json
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tailwind CSS v4 Notes
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+This project utilizes the newest Tailwind CSS v4 engine, which simplifies configurations and uses modern CSS features (like `@theme`). If you see warnings in VS Code like `Unknown at rule @theme`, it is an editor Linting feature, not a bug. You can disable it by setting `css.lint.unknownAtRules: "ignore"` in VS Code settings.

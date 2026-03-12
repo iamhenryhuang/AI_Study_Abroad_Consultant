@@ -13,3 +13,10 @@ export interface Message {
   loading: boolean
   error?: boolean
 }
+
+export interface ChatSession {
+  id: string
+  title: string
+  updatedAt: number
+  messages: Message[]
+}
