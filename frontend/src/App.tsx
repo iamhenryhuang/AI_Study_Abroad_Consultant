@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { Settings, Plus, MessageSquare, Trash2 } from 'lucide-react'
+import { Settings, Plus, MessageSquare, Trash2, User } from 'lucide-react'
 import { useStreamChat } from './hooks/useStreamChat'
 import { SettingsModal } from './components/SettingsModal'
+import { UserProfileModal } from './components/UserProfileModal'
 import { ChatInput } from './components/ChatInput'
 import { MessageBubble } from './components/MessageBubble'
 
@@ -24,6 +25,7 @@ export default function App() {
     deleteSession
   } = useStreamChat()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Scroll to bottom on new messages
@@ -74,8 +76,16 @@ export default function App() {
           ))}
         </div>
 
-        {/* 底部設定 */}
-        <div className="mt-auto pt-4 space-y-1">
+        {/* 底部設定與個人資料 */}
+        <div className="mt-auto pt-4 border-t border-gray-200/60 pb-1 space-y-1">
+          <button
+            onClick={() => setIsProfileOpen(true)}
+            className="flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-200/50 transition-colors text-gray-700 font-medium"
+          >
+            <User size={18} className="text-gray-500" />
+            <span className="text-sm">個人資料</span>
+          </button>
+          
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-200/50 transition-colors text-gray-700 font-medium"
@@ -152,6 +162,12 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* 使用者資料彈窗 */}
+      <UserProfileModal 
+        isOpen={isProfileOpen} 
+        onClose={() => setIsProfileOpen(false)} 
       />
     </div>
   )
