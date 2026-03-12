@@ -37,6 +37,9 @@ from embedder.pipeline import run_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
 
+from dotenv import load_dotenv
+load_dotenv()
+
 COMMANDS = {
     "setup": ("檢查連線並建立資料庫", setup_db),
     "import": ("建表並匯入 data/*.json", import_json),

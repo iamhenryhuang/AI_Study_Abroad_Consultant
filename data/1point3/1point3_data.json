@@ -985,6 +985,32 @@
       "undergrad_school": "本科非985/211",
       "content": "之前申的保底",
       "crawl_time": "2026-03-02 13:29:52"
+    },
+    {
+      "url": "",
+      "title": "【新提醒】neu msis Seattle|一亩三分地录取汇报：研究生版",
+      "result": "AD小奖",
+      "school": "NEU",
+      "major": "MFE-Fin-FinMath",
+      "gpa": "2.72||2.72",
+      "toefl": null,
+      "gre": "330||160||170||4",
+      "undergrad_school": "本科非985/211",
+      "content": "之前申的保底",
+      "crawl_time": "2026-03-02 13:29:52"
+    },
+    {
+      "url": "",
+      "title": "",
+      "result": "AD小奖",
+      "school": "NEU",
+      "major": "CS",
+      "gpa": null,
+      "toefl": null,
+      "gre": "330||160||170||4",
+      "undergrad_school": "淡江大学",
+      "content": "",
+      "crawl_time": "2026-03-02 13:29:52"
     }
   ],
   "IOWASTATE": [

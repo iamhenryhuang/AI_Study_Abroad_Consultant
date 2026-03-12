@@ -9,35 +9,64 @@ v2 改動：
   - 回傳結果包含 source_url，讓 Gemini 可以在回答中引用網頁來源
   - run_rag_pipeline 新增 school_id 參數，支援指定學校限定搜尋
 """
-
-"""
-rag_pipeline.py — RAG 完整流程（v2）
-
-檢索 → 重排序 → 生成回答
-或
-Agentic RAG： Gemini Function Calling ReAct Loop
-"""
-
+import json
 import sys
 import argparse
 from pathlib import Path
+from generator.gemini import get_gemini_client
 
 CURRENT_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = CURRENT_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from retriever.search import search_core, search_alternative
+# 假設資料夾結構如你圖中所示
+DATA_DIR = CURRENT_DIR / "data" / "1point3"
+DISTRIBUTION_PATH = DATA_DIR / "1point3_distribution.json"
+
+from retriever.search import search_alternative, search_core
 from retriever.multi_query import search_with_multi_query
 from retriever.agent import run_agent
-from generator.gemini import generate_admission_analysis
+from generator.gemini import generate_answer
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+def load_admission_stats():
+    """載入 1Point3Acres 的錄取統計 JSON 資料"""
+    try:
+        with open(DISTRIBUTION_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("university_admissions_data", data)
+        
+    except FileNotFoundError:
+        print(f" 找不到統計資料檔: {DISTRIBUTION_PATH}")
+        return {}
+    
+def evaluate_attainability(profile: dict, school_list: list, admission_stats: dict) -> bool:
+    gpa = profile.get('gpa')
+    toefl = profile.get('toefl')
+    gre = profile.get('gre')
+    graduated_school = profile.get('graduate_school', False)
 
-from admission.admission_data import ADMISSION_DATA
+    for school in school_list:
+        required_gpa = admission_stats.get(school, {}).get('median_gpa', {})
+        required_toefl = admission_stats.get(school, {}).get('median_toefl', {})
+        required_gre = admission_stats.get(school, {}).get('median_gre', {})
+        required_schools = admission_stats.get(school, {}).get('graduated_school', [])
 
+        if required_gpa and gpa > required_gpa:
+            count += 1
+        
+        if required_toefl and toefl > required_toefl:
+            count += 1
+        
+        if required_gre and gre > required_gre:
+            count += 1
+        
+        if count < 1 :
+            return False
+        
+        return True
+
+    return count == len(school_list)
 
 def run_rag_pipeline(
     query: str,
@@ -47,26 +76,23 @@ def run_rag_pipeline(
     profile: dict | None = None,
 ) -> bool:
     """
-    執行完整的 RAG 流程：
-    1. 檢索候選資料
-    2. 將使用者 profile + school_stats + 檢索資料交給 LLM 判斷
-    """
+    執行完整的 RAG 流程。
 
+    Args:
+        query:           使用者提出的問題。
+        top_k:           檢索的數量。
+        use_multi_query: 是否使用 Multi-Query 擴展查詢。
+        school_id:       限定搜尋的學校（e.g. 'cmu', 'caltech'），None 表示全部。
+    """
     print(f"\n開始執行 RAG 流程")
     print(f"   問題：'{query}'")
 
-    if profile:
-        print("\n使用者背景：")
-        print(f"GPA   : {profile.get('gpa')}")
-        print(f"GRE   : {profile.get('gre')}")
-        print(f"TOEFL : {profile.get('toefl')}")
-        print(f"Dream : {profile.get('dream_school')} - {profile.get('program')}")
-        print(f"畢業學校: {profile.get('graduated_school', '未知')}")
+    admission_stats = load_admission_stats()
 
     if school_id:
         print(f"過濾學校：{school_id}")
 
-    # 1️⃣ 檢索候選資料
+    # 1. 檢索與重排序
     if use_multi_query:
         print(f"  [RAG] 正在執行 Multi-Query 檢索...")
         results = search_with_multi_query(
@@ -78,36 +104,26 @@ def run_rag_pipeline(
             query, top_k=top_k, use_rerank=True, school_id=school_id
         )
 
+    if profile :
+        print(f"  [RAG] 正在評估使用者成績是否達到檢索到的學校要求...")
+        if not evaluate_attainability(profile, results):
+            print("根據檢索到的資料，使用者的成績可能無法達到相關學校的要求。建議提升成績後再申請。")
+            alt_schools = search_alternative(profile, admission_stats)
+            results += alt_schools
+            print(f"  [RAG] 為使用者推薦了 {len(alt_schools)} 所備案學校，已加入檢索結果中。")
+            
+        else:
+            print("根據檢索到的資料，使用者的成績看起來符合相關學校的要求，可以繼續申請流程。")
+
     if not results:
         print("未能檢索到相關資訊。")
         return False
 
     print(f"  [RAG] 檢索到 {len(results)} 筆資料")
 
-    # 2️⃣ 準備給 LLM 的 prompt
-    profile_text = ""
-    if profile:
-        profile_text = f"""
-        使用者資料：
-        GPA: {profile.get('gpa')}
-        GRE: {profile.get('gre')}
-        TOEFL: {profile.get('toefl')}
-        畢業學校: {profile.get('graduated_school', '未知')}
-        目標學校/科系: {profile.get('dream_school')} / {profile.get('program')}
-        """
-
-    context_text = "\n".join([
-        f"{d['university_name']} ({d.get('page_type', 'N/A')}) - {d.get('source_url', 'N/A')}\n{d['chunk_text'][:300]}..."
-        for d in results
-    ])
-
-    # 3️⃣ 交給 LLM 判斷 Dream / Match / Safety
-    answer = generate_admission_analysis(
-        query=f"{profile_text}\n\n檢索資料:\n{context_text}\n\n問題:\n{query}",
-        context_docs=results,
-        profile=profile,
-        school_stats=ADMISSION_DATA[{school_id}]
-    )
+    # 2. 生成回答
+    print(f"  [RAG] 正在使用 Gemini 生成回答...")
+    answer = generate_answer(query, results)
 
     if answer:
         print("\n" + "=" * 30 + " Gemini 回答 " + "=" * 30)
@@ -126,6 +142,11 @@ def run_agent_pipeline(
 ) -> bool:
     """
     執行 Agentic RAG 流程（ReAct Loop）。
+
+    Args:
+        query:     使用者問題
+        max_steps: 最大搜尋迭代次數
+        verbose:   是否印出每步驟的推理過程
     """
     answer = run_agent(query, max_steps=max_steps, verbose=verbose)
     if answer:
@@ -146,25 +167,11 @@ if __name__ == "__main__":
     parser.add_argument("--multi-query", action="store_true", help="是否啟用 Multi-Query")
     parser.add_argument("--school", type=str, default=None, help="限定學校 e.g. cmu, caltech")
     parser.add_argument("--top-k", type=int, default=7, help="檢索數量")
-    parser.add_argument("--gpa", type=float, help="GPA (e.g. 3.8)")
-    parser.add_argument("--gre", type=int, help="GRE (e.g. 325)")
-    parser.add_argument("--toefl", type=int, help="TOEFL (e.g. 105)")
-    parser.add_argument("--dream-school", type=str, help="Dream school (e.g. MIT)")
-    parser.add_argument("--program", type=str, help="Program (e.g. Computer Science)")
-    parser.add_argument("--graduated-school", type=str, help="畢業學校 (e.g. 海本/南浙復上)")
-
+    parser.add_argument("--gpa", type=float, help="GPA")
+    parser.add_argument("--toefl", type=int, help="TOEFL")
+    parser.add_argument("--program", type=str, default="CS", help="目標學系")
+    parser.add_argument("--school", type=str, help="限定學校")
     args = parser.parse_args()
-
-    profile = None
-    if args.gpa or args.gre or args.toefl:
-        profile = {
-            "gpa": args.gpa,
-            "gre": args.gre,
-            "toefl": args.toefl,
-            "dream_school": args.dream_school,
-            "program": args.program,
-            "graduated_school": args.graduated_school,
-        }
 
     q = args.query
     if not q:
@@ -182,7 +189,12 @@ if __name__ == "__main__":
                 top_k=args.top_k,
                 use_multi_query=args.multi_query,
                 school_id=args.school,
-                profile=profile,
+                profile={
+                    "gpa": args.gpa,
+                    "toefl": args.toefl,
+                    "gre": args.gre,
+                    "program": args.program
+                }
             )
     else:
         print("未輸入問題。")

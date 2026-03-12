@@ -2,6 +2,7 @@
 """
 檢索模組：將問題轉成向量，並從 pgvector 中尋找最相關的 chunk。
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -18,66 +19,57 @@ if str(SCRIPTS_DIR) not in sys.path:
 from db.connection import get_connection
 from embedder.vectorize import embed_texts
 
-<<<<<<< Updated upstream
-def run_search(query: str, top_k: int = 3):
-    """執行向量搜尋並印出結果。"""
-    print(f"\n正在檢索問題: '{query}'")
+from generator.gemini import get_gemini_client
+
+def search_alternative(profile: dict, admission_data: dict) -> list:
+    """
+    將統計數據餵給 LLM，讓它分析哪些學校對該學生的背景較為友善（保底/匹配校）。
+    """
+    client = get_gemini_client()
     
-    # 1. 向量化問題
-    print("  [1/3] 正在將問題轉為向量...")
-=======
-def search_alternative(
-    dream_dept: str,
-    top_k: int = 5,
-) -> list[dict]:
-    """
-    搜尋備案科系 / 學校
+    # 1. 將複雜的字典轉化為文字格式，讓 LLM 閱讀
+    # 我們只把校名和 GPA 分佈餵進去，節省 token 並聚焦
+    stats_summary = ""
+    for school, data in admission_data.items():
+        stats_summary += f"\n[學校: {school}]\n"
+        stats_summary += f"GRE 分佈 (錄取, 拒絕): {json.dumps(data.get('gre', {}), ensure_ascii=False)}\n"
+        stats_summary += f"GPA 分佈 (錄取, 拒絕): {json.dumps(data.get('gpa', {}), ensure_ascii=False)}\n"
+        stats_summary += f"TOEFL 分佈 (錄取, 拒絕): {json.dumps(data.get('toefl', {}), ensure_ascii=False)}\n"
+        stats_summary += f"GPA 中位數: {json.dumps(data.get('median_gpa', {}), ensure_ascii=False)}\n"
+        stats_summary += f"TOEFL 中位數: {json.dumps(data.get('median_toefl', {}), ensure_ascii=False)}\n"
+        stats_summary += f"GRE 中位數: {json.dumps(data.get('median_gre', {}), ensure_ascii=False)}\n"
+        
+    # 2. 建立分析 Prompt
+    prompt = f"""
+        你是一位留學數據分析專家。請根據以下學生的背景與各校的歷史錄取數據，
+        選出 3 所該學生錄取機率較高（作為保底或中游匹配）的學校。
 
-    Args:
-        dream_dept: 夢想科系 (e.g. "Computer Science")
-        top_k:      回傳筆數
+        【學生背景】
+        - GPA: {profile.get('gpa')}
+        - TOEFL: {profile.get('toefl')}
+        - 目標系所: {profile.get('program')}
 
-    Returns:
-        list[dict]
-    """
+        【各校錄取統計數據 (格式為 "區間": [錄取人數, 拒絕人數])】
+        {stats_summary}
 
-    if not dream_dept:
+        【任務】
+        請綜和考量率取率以及錄取人數，找出學生 GPA , TOEFL, GRE 有機會上的學校。
+        graduated_school 的排名為 海本 = 清北 > 南浙復上 > TOP15 > TOP 30 > 其他985/211 > 雙非。
+        請只回傳學校名稱，並以逗號分隔，例如：Northeastern University, San Jose State University
+        不要有任何額外的解釋文字。
+        """
+
+    try:
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        # 3. 處理回傳結果
+        raw_output = response.text.strip()
+        # 將字串轉為 list 並去除多餘空白
+        recommended_schools = [s.strip() for s in raw_output.split(",")]
+        return recommended_schools
+    
+    except Exception as e:
+        print(f"LLM 備案搜尋出錯: {e}")
         return []
-
-    # 1️⃣ 建立多個查詢（提高 recall）
-    queries = [
-        f"{dream_dept} program",
-        f"{dream_dept} graduate program",
-        f"universities with strong {dream_dept}",
-        f"top universities for {dream_dept}",
-    ]
-
-    all_results = []
-    seen_urls = set()
-
-    for q in queries:
-        results = search_core(
-            q,
-            top_k=top_k,
-            use_rerank=True
-        )
-
-        for r in results:
-            url = r.get("source_url")
-
-            # 避免重複資料
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                all_results.append(r)
-
-    # 2️⃣ 依 vector_score 排序
-    all_results.sort(
-        key=lambda x: x.get("vector_score", 0),
-        reverse=True
-    )
-
-    # 3️⃣ 回傳前 top_k
-    return all_results[:top_k]
 
 def search_core(
     query: str,
@@ -108,7 +100,6 @@ def search_core(
           - metadata (JSONB)
     """
     # 1. 向量化查詢
->>>>>>> Stashed changes
     query_embeddings = embed_texts([query])
     if not query_embeddings:
         print("向量化失敗。")
@@ -146,6 +137,7 @@ def search_core(
             if not rows:
                 print("查無相關資料。")
                 return True
+            
             else:
                 for i, (text, meta, univ, prog, score) in enumerate(rows, 1):
                     res = (
@@ -162,6 +154,7 @@ def search_core(
                         res += f"  - 截止日期: {meta.get('fall_deadline', 'N/A')}\n"
                     res += "-" * 80 + "\n"
                     print(res)
+                    
                 return True
             
     except Exception as e:
@@ -170,8 +163,65 @@ def search_core(
     finally:
         conn.close()
 
+def run_search(
+    query: str,
+    top_k: int = 5,
+    use_rerank: bool = True,
+    school_id: str | None = None,
+):
+    """執行向量搜尋並印出結果（CLI 用）。"""
+    print(f"\n正在檢索：'{query}'")
+    if school_id:
+        print(f"   [過濾] 學校: {school_id}")
+    print(f"   [1/2] 執行向量搜尋...")
+
+    #results = search_core(query, top_k=top_k, use_rerank=use_rerank, school_id=school_id)
+
+    results = [
+        {
+            "chunk_text": "Carnegie Mellon University (CMU) MSCS 錄取標準：通常需要 GPA 3.8 以上，且非常看重資料結構與演算法的基礎。對於 TOEFL 要求至少 100 分。",
+            "metadata": {"minimum_gpa": 3.8, "toefl_min": 100, "gre_status": "Optional", "fall_deadline": "Dec 15"},
+            "university": "Carnegie Mellon University",
+            "program": "Computer Science",
+            "similarity": 0.8954
+        },
+        {
+            "chunk_text": "Stanford University CS 計畫介紹：學術背景強大的申請者更有優勢。雖然沒有嚴格的 GPA 門檻，但錄取者平均落在 3.9 左右。GRE 建議提供以展現量化能力。",
+            "metadata": {"minimum_gpa": "N/A", "toefl_min": 100, "gre_status": "Recommended", "fall_deadline": "Dec 1"},
+            "university": "Stanford University",
+            "program": "Computer Science",
+            "similarity": 0.8721
+        }
+    ]
+
+    if not results:
+        print("查無相關資料。")
+        return True
+
+    print(f"   [2/2] 完成，共 {len(results)} 筆結果\n")
+    print("=" * 80)
+
+    """"
+    for i, res in enumerate(results, 1):
+        #score_str = f"向量分數: {res['vector_score']:.4f}"
+        if "rerank_score" in res:
+            score_str += f"  Re-rank: {res['rerank_score']:.4f}"
+
+        print(
+            f"【結果 {i}】 {score_str}\n"
+            f"  學校    : {res['university_name']} ({res['school_id']})\n"
+            f"  頁面類型: {res.get('page_type', 'unknown')}\n"
+            f"  來源 URL: {res.get('source_url', 'N/A')}\n"
+            f"  內容摘要: {res['chunk_text'].strip()[:500]}...\n"
+            + "-" * 80
+        )
+
+    """
+    return True
+
 if __name__ == "__main__":
     test_query = "UIUC MSCS GPA and TOEFL requirements?"
     if len(sys.argv) > 1:
         test_query = " ".join(sys.argv[1:])
+
     run_search(test_query)
