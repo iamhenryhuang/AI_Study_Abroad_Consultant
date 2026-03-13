@@ -30,6 +30,7 @@ wheels/
 venv/
 ENV/
 env/
+node_modules/
 
 # IDE / 編輯器
 .idea/
