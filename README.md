@@ -1,182 +1,102 @@
-# Study Abroad RAG — North America CS Master's
+# Study Abroad RAG: North America CS Master's Consultant
 
-RAG-based consultant for applying to North American CS master's programs. Crawls official university pages and processes the raw text into a vector database for semantic retrieval and LLM-powered advice.
-
-**Stack:** Gemini 2.5 Flash · `BAAI/bge-m3` embeddings · PostgreSQL + **pgvector (HNSW)** · LangChain · Cross-Encoder reranking
-
-**Flow:** Crawl URLs or fetch professor data (SerpAPI) → store raw text as JSON → chunk by page type → embed → pgvector. Query → vector search (+ optional school filter) → rerank → Gemini answer.
+A RAG-based tool built to simplify the search for North American CS master's programs. It scrapes official university pages, indexes them in a vector database, and uses an LLM agent to provide context-aware answers about admission requirements and application strategies.
 
 ---
 
-## Data Format
+## Operations & CLI Commands
 
-`data/*.json` (e.g., `caltech.json`, `cmu.json`) uses a flat `{ url: raw_text }` structure:
+All Python commands should be run from the **project root**.
 
-```json
-{
-  "https://www.cs.cmu.edu/academics/graduate-admissions": "Carnegie Mellon University...",
-  "https://www.gradoffice.caltech.edu/admissions/faq-applicants": "Frequently Asked Questions..."
-}
+### 1. Database (SQL) Operations
+Manage the PostgreSQL schema and traditional data:
+- **`python backend/scripts/run.py setup`**: Check connection and create the `study_abroad` database if it doesn't exist.
+- **`python backend/scripts/run.py verify-db`**: Verify that the universities and web pages have been correctly imported into SQL.
+- **`python backend/scripts/run.py export`**: Export a data summary to `db/exported_data.sql`.
+
+### 2. Embedding & Vector Pipeline
+Prepare and index data for semantic search:
+- **`python backend/scripts/run.py import`**: Build schema + Chunk text + Embed + Store everything in Postgres.
+- **`python backend/scripts/run.py embed`**: Specifically runs the chunking and embedding pipeline for existing records.
+- **`python backend/scripts/run.py verify-vdb`**: Check the vector store status (chunk counts, vector dimensions, and HNSW index).
+
+### 3. RAG & Search Operations
+Test the retrieval and generation logic in the terminal:
+- **Vector Search (No LLM)**:
+  - `python backend/scripts/run.py search "MSCS admission requirements"`
+  - `python backend/scripts/run.py search "funding" --school caltech`
+- **Standard RAG (Retrieval + LLM)**:
+  - `python backend/scripts/run.py rag "What are the requirements for CMU?"`
+  - `python backend/scripts/run.py rag "Compare deadlines" --mq` (Uses **Multi-Query** to expand search)
+  - `python backend/scripts/run.py rag "GPA reqs" --school ucla` (Filters by specific school)
+
+### 4. Agentic RAG (Advanced Reasoning)
+Uses a ReAct loop to solve complex queries that require multiple steps:
+- **`python backend/scripts/run.py agent "Compare Stanford and MIT deadlines"`**
+- **`python backend/scripts/run.py agent "Which school has best AI faculty?" --max-steps 10`**
+
+### 5. Professor Profiling
+Fetch research data and embed it directly:
+- **`python -m backend.scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford" --embed`**
+
+---
+
+## Running the Application
+
+### One-Time Initialization
+If this is your first time setting up, run this to handle both DB setup and data import:
+```bash
+python backend/scripts/run.py init-all
 ```
 
-The pipeline processes every JSON in the `data/` folder. The school (`cmu`, `caltech`, …) is inferred automatically from the URL domain or the filename. To add a new school, update `SCHOOL_MAP` in `scripts/embedder/pipeline.py`.
+### Starting the Services
+You need two terminals running simultaneously.
+
+#### **Backend (FastAPI)**
+```bash
+# Install dependencies first
+pip install -r backend/requirements.txt
+
+# Start the uvicorn server
+uvicorn backend.api:app --reload --port 8000
+```
+- API Docs: `http://localhost:8000/docs`
+- Health Check: `http://localhost:8000/api/health`
+
+#### **Frontend (React)**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Local URL: `http://localhost:5173`
 
 ---
 
 ## Project Structure
 
-```
-data/
-  *.json                ← { url: raw_text } — school-specific JSON files
-db/
-  init_db.sql           ← schema: universities + web_pages + document_chunks
-scripts/
-  run.py                ← unified entry point
-  db/                   ← connection, setup, import/export
-  embedder/             ← chunker, pipeline, vectorize, store, verifier
-  professor_fetcher/    ← SerpAPI-based professor profile & paper scraper
-  retriever/            ← search, reranker, multi_query, rag_pipeline, agent
-  generator/            ← Gemini answer generation
-```
-
----
-
-## Quick Start
-
-1. Copy `.env.example` → `.env`, fill in the required fields:
-   - `DATABASE_URL` — PostgreSQL connection string
-   - `GOOGLE_API_KEY` — Gemini API key
-   - `BGE_EMBED_MODEL_PATH` — local path to `BAAI/bge-m3` (default: `D:\DforDownload\BAAI\bge-m3`)
-   - `BGE_RERANKER_MODEL_PATH` — local path to `BAAI/bge-reranker-v2-m3`
-2. `pip install -r requirements.txt`
-3. From the project root:
-
-```bash
-# First-time setup: create DB + build tables + chunk + embed (all-in-one)
-python scripts/run.py init-all
-
-# Or step by step:
-python scripts/run.py setup       # create study_abroad database
-python scripts/run.py import      # build schema, chunk, embed & store
-
-# Verify
-python scripts/run.py verify-db   # check SQL tables
-python scripts/run.py verify-vdb  # check chunk counts & vector dims
-
-# Search & RAG
-python scripts/run.py search "CMU SCS admission requirements"
-python scripts/run.py search "Caltech PhD funding" --school caltech
-
-python scripts/run.py rag "What are CMU MSCS requirements?"
-python scripts/run.py rag "Compare CMU and Caltech deadlines" --school cmu --mq
-
-# Agentic RAG (ReAct Loop — automatically decides search steps & strategy)
-python scripts/run.py agent "Compare GPA requirements and deadlines for Stanford, CMU and MIT"
-python scripts/run.py agent "What do admitted students say about the CMU MSCS interview?" --max-steps 6
-
-# Export SQL summary
-python scripts/run.py export
-
-# --- New: Professor Profiling (SerpAPI) ---
-
-# Fetch a professor's research areas & recent papers (stores to data/*_professors.json)
-# Search uses name + school (no field restriction)
-python -m scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford"
-
-# Fetch AND directly chunk + embed + store to DB
-python -m scripts.professor_fetcher.run_fetch --name "Yann LeCun" --school "NYU" --embed
-
-# Batch mode from a JSON config
-python -m scripts.professor_fetcher.run_fetch --config scripts/professor_fetcher/professors_example.json --embed
-
-# Fetch ALL professors for a school
-python -m scripts.professor_fetcher.run_fetch --match-school --school "Stanford University"
+```text
+├── backend/                # FastAPI application
+│   ├── api.py              # API entry point & SSE logic
+│   ├── data/               # University JSON dumps
+│   ├── scripts/            # Core logic
+│   │   ├── db/             # SQL operations
+│   │   ├── embedder/       # Chunking & Embedding
+│   │   ├── retriever/      # Search, RAG, and Agent logic
+│   │   └── run.py          # Unified CLI Entry point
+│   └── requirements.txt    # Python dependencies
+├── db/                     # Database schema & init scripts
+└── frontend/               # React application (Vite + TS)
 ```
 
 ---
 
-## Running Frontend & Backend
+## Technical Highlights
 
-This project includes a **React Vite frontend** and **FastAPI SSE backend** for real-time Agent reasoning visualization.
-
-### Prerequisites
-
-Install all dependencies (including FastAPI & uvicorn):
-
-```bash
-pip install -r requirements.txt
-cd frontend && npm install
-```
-
-### Starting Services (Development Mode)
-
-**Terminal 1 - Start Backend Server**:
-
-```bash
-uvicorn api:app --reload --port 8000
-```
-
-Expected output:
-```
-INFO:     Uvicorn running on http://127.0.0.1:8000
-INFO:     Application startup complete.
-```
-
-**Terminal 2 - Start Frontend Dev Server**:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Expected output:
-```
-VITE v7.3.1  Local:   http://localhost:5173/
-```
-
-Open **`http://localhost:5173`** to use the web interface.
-
-### Quick API Test
-
-To verify the backend is working:
-
-```bash
-python test_api.py
-```
-
-This command tests the `/api/health` endpoint and `/api/chat` SSE streaming.
-
-### Production Build
-
-**Frontend Build**:
-
-```bash
-cd frontend
-npm run build
-```
-
-Output in `frontend/dist/` ready for deployment.
-
-**Backend Deployment**:
-
-```bash
-gunicorn -w 1 -k uvicorn.workers.UvicornWorker api:app --bind 0.0.0.0:8000
-```
+- **Gemini 2.5 Flash**: Backend LLM for high-speed reasoning.
+- **BGE-M3 & Reranker**: State-of-the-art embedding and cross-encoder models.
+- **pgvector + HNSW**: Efficient vector storage and retrieval within PostgreSQL.
+- **FastAPI SSE**: Real-time streaming of the Agent's "thinking" process to the UI.
+- **Dynamic Chunking**: Context-aware text splitting (FAQ, Admissions, Checklists).
 
 ---
-
-## Chunk Strategy by Page Type
-
-Chunks are sized for **English text** (~5–6 chars/word). FAQ pages use a regex pre-pass to extract whole Q&A pairs before splitting.
-
-| URL contains | page_type | chunk_size | overlap |
-|---|---|---|---|
-| `faq` | faq | 2000 chars (Q&A pre-split) | 200 |
-| `checklist` / `requirements` | checklist | 1200 chars | 150 |
-| `admissions` / `apply` | admissions | 1600 chars | 200 |
-| `professor_profile` (from Scholar) | professor_profile | 1800 chars | 200 |
-| `professor_paper` (from Scholar) | professor_paper | 1000 chars | 150 |
-| anything else | general | 1400 chars | 200 |
-
----
-

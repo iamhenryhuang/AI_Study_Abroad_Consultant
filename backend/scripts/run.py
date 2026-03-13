@@ -2,15 +2,15 @@
 """
 資料庫腳本統一入口（v2）。請在專案根目錄執行：
 
-  python scripts/run.py setup      # 檢查連線，必要時建立 study_abroad 資料庫
-  python scripts/run.py import     # 建表 + 切片 + 向量化並匯入 data/*.json
-  python scripts/run.py verify-db  # 檢查 SQL 資料是否已寫入
-  python scripts/run.py verify-vdb # 檢查向量資料庫狀態（chunk 數量、向量維度）
-  python scripts/run.py export     # 匯出摘要至 db/exported_data.sql
-  python scripts/run.py search [query] [--school cmu|caltech]
-  python scripts/run.py rag [query] [--mq] [--school cmu|caltech]
-  python scripts/run.py agent [query] [--max-steps N]   # Agentic RAG (ReAct Loop)
-  python scripts/run.py init-all   # 一次完成 setup + import
+  python backend/scripts/run.py setup      # 檢查連線，必要時建立 study_abroad 資料庫
+  python backend/scripts/run.py import     # 建表 + 切片 + 向量化並匯入 data/*.json
+  python backend/scripts/run.py verify-db  # 檢查 SQL 資料是否已寫入
+  python backend/scripts/run.py verify-vdb # 檢查向量資料庫狀態（chunk 數量、向量維度）
+  python backend/scripts/run.py export     # 匯出摘要至 db/exported_data.sql
+  python backend/scripts/run.py search [query] [--school cmu|caltech]
+  python backend/scripts/run.py rag [query] [--mq] [--school cmu|caltech]
+  python backend/scripts/run.py agent [query] [--max-steps N]   # Agentic RAG (ReAct Loop)
+  python backend/scripts/run.py init-all   # 一次完成 setup + import
 """
 import os
 import sys

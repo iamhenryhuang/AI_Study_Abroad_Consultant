@@ -14,7 +14,7 @@ from datetime import datetime
 
 import psycopg
 
-from .connection import DATABASE_URL, ROOT, get_connection
+from .connection import DATABASE_URL, BACKEND_ROOT, PROJECT_ROOT, get_connection
 
 
 # ── 工具函式 ──────────────────────────────────────────────────
@@ -86,7 +86,7 @@ def import_json(data_dirname: str = "data"):
         return False
     try:
         # 1. 建表
-        sql_path = ROOT / "db" / "init_db.sql"
+        sql_path = PROJECT_ROOT / "db" / "init_db.sql"
         if not sql_path.is_file():
             print(f"找不到 {sql_path}")
             return False
@@ -103,8 +103,8 @@ def import_json(data_dirname: str = "data"):
 
     # 2. 執行 pipeline（切片 + 向量化 + 寫入）
     import sys
-    if str(ROOT / "scripts") not in sys.path:
-        sys.path.insert(0, str(ROOT / "scripts"))
+    if str(BACKEND_ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(BACKEND_ROOT / "scripts"))
 
     from embedder.pipeline import run_pipeline
     return run_pipeline(data_dirname)
@@ -173,7 +173,7 @@ def export_sql():
     if not DATABASE_URL:
         print("錯誤: 未設定 DATABASE_URL（.env）。")
         return False
-    out_path = ROOT / "db" / "exported_data.sql"
+    out_path = PROJECT_ROOT / "db" / "exported_data.sql"
     try:
         conn = get_connection()
         if not conn:

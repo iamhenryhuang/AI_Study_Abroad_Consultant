@@ -64,9 +64,29 @@ SCHOOL_MAP: dict[str, dict] = {
         "school_id": "uiuc",
         "name": "UIUC",
     },
+    "uiuc.edu": {
+        "school_id": "uiuc",
+        "name": "UIUC",
+    },
     "cornell.edu": {
         "school_id": "cornell",
         "name": "Cornell University",
+    },
+    "harvard.edu": {
+        "school_id": "harvard",
+        "name": "Harvard University",
+    },
+    "princeton.edu": {
+        "school_id": "princeton",
+        "name": "Princeton University",
+    },
+    "utexas.edu": {
+        "school_id": "utexas",
+        "name": "UT Austin",
+    },
+    "yale.edu": {
+        "school_id": "yale",
+        "name": "Yale University",
     },
     "ucla.edu": {
         "school_id": "ucla",
