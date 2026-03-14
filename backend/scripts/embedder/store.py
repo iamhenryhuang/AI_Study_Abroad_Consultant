@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import json as _json
 
-import psycopg2
+import psycopg
 
 
 def upsert_chunks_by_page(
-    conn: psycopg2.extensions.connection,
+    conn: psycopg.Connection,
     university_id: int,
     page_id: int,
     school_id: str,
@@ -27,7 +27,7 @@ def upsert_chunks_by_page(
     回傳寫入筆數。
 
     Args:
-        conn:          psycopg2 連線
+        conn:          psycopg 連線
         university_id: 對應的 universities.id
         page_id:       對應的 web_pages.id
         school_id:     學校識別碼（e.g. 'cmu'）

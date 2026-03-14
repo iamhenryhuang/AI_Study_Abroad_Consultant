@@ -62,4 +62,4 @@ dist-ssr/
 # Vite
 .vite/
 frontend/dist/
-frontend/.vite/
+frontend/.vite/
