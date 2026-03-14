@@ -27,7 +27,7 @@ Test the retrieval and generation logic in the terminal:
   - `python backend/scripts/run.py search "funding" --school caltech`
 - **Standard RAG (Retrieval + LLM)**:
   - `python backend/scripts/run.py rag "What are the requirements for CMU?"`
-  - `python backend/scripts/run.py rag "Compare deadlines" --mq` (Uses **Multi-Query** to expand search)
+  - `python backend/scripts/run.py rag "Compare admission requirements across schools"`
   - `python backend/scripts/run.py rag "GPA reqs" --school ucla` (Filters by specific school)
 
 ### 4. Agentic RAG (Advanced Reasoning)
