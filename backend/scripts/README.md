@@ -25,7 +25,6 @@ scripts/
 ├── retriever/
 │   ├── search.py           ← vector search (HNSW), optional school_id/page_type filter
 │   ├── reranker.py         ← Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)
-│   ├── multi_query.py      ← Multi-Query expansion via Gemini
 │   ├── agent.py            ← Agentic RAG: Gemini Function Calling ReAct loop
 │   └── rag_pipeline.py     ← full RAG orchestration: search → rerank → generate
 └── generator/
@@ -66,7 +65,6 @@ python scripts/run.py search "Caltech PhD funding" --school caltech
 
 # Full RAG: search → rerank → Gemini answer
 python scripts/run.py rag "What documents does CMU SCS require?"
-python scripts/run.py rag "Compare CMU and Caltech funding packages" --mq
 python scripts/run.py rag "Stanford MS admission GPA" --school stanford
 
 # Agentic RAG: Gemini 自動决定搜尋次數與策略（ReAct Loop）
@@ -76,7 +74,6 @@ python scripts/run.py agent "Compare GPA and deadline for Stanford, CMU, and MIT
 **Flags:**
 
 | `--school cmu` | Filter retrieval to a single school (`cmu`, `caltech`, …) |
-| `--mq` | Enable Multi-Query expansion (Gemini generates 3 related queries) |
 | `--max-steps N` | Max ReAct iterations for `agent` command (default: 5) |
 
 ---

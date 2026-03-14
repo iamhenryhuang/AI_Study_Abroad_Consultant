@@ -20,7 +20,6 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from retriever.search import search_core
-from retriever.multi_query import search_with_multi_query
 from retriever.agent import run_agent
 from generator.gemini import generate_answer
 
@@ -29,7 +28,6 @@ from generator.gemini import generate_answer
 def run_rag_pipeline(
     query: str,
     top_k: int = 7,
-    use_multi_query: bool = False,
     school_id: str | None = None,
 ) -> bool:
     """
@@ -38,7 +36,6 @@ def run_rag_pipeline(
     Args:
         query:           使用者提出的問題。
         top_k:           檢索的數量。
-        use_multi_query: 是否使用 Multi-Query 擴展查詢。
         school_id:       限定搜尋的學校（e.g. 'cmu', 'caltech'），None 表示全部。
     """
     print(f"\n開始執行 RAG 流程")
@@ -47,16 +44,10 @@ def run_rag_pipeline(
         print(f"過濾學校：{school_id}")
 
     # 1. 檢索與重排序
-    if use_multi_query:
-        print(f"  [RAG] 正在執行 Multi-Query 檢索...")
-        results = search_with_multi_query(
-            query, top_k=top_k, use_rerank=True, school_id=school_id
-        )
-    else:
-        print(f"  [RAG] 正在檢索相關資料...")
-        results = search_core(
-            query, top_k=top_k, use_rerank=True, school_id=school_id
-        )
+    print(f"  [RAG] 正在檢索相關資料...")
+    results = search_core(
+        query, top_k=top_k, use_rerank=True, school_id=school_id
+    )
 
     if not results:
         print("未能檢索到相關資訊。")
@@ -107,7 +98,6 @@ if __name__ == "__main__":
     parser.add_argument("query", nargs="?", help="使用者問題")
     parser.add_argument("--agent", action="store_true", help="使用 Agentic RAG（ReAct Loop）")
     parser.add_argument("--max-steps", type=int, default=5, help="Agent 最大迭代次數")
-    parser.add_argument("--multi-query", action="store_true", help="是否啟用 Multi-Query")
     parser.add_argument("--school", type=str, default=None, help="限定學校 e.g. cmu, caltech")
     parser.add_argument("--top-k", type=int, default=7, help="檢索數量")
     args = parser.parse_args()
@@ -115,9 +105,6 @@ if __name__ == "__main__":
     q = args.query
     if not q:
         q = input("請輸入問題: ").strip()
-        if q.endswith("--mq"):
-            q = q.replace("--mq", "").strip()
-            args.multi_query = True
 
     if q:
         if args.agent:
@@ -126,7 +113,6 @@ if __name__ == "__main__":
             run_rag_pipeline(
                 q,
                 top_k=args.top_k,
-                use_multi_query=args.multi_query,
                 school_id=args.school,
             )
     else:
