@@ -8,7 +8,7 @@
   python backend/scripts/run.py verify-vdb # 檢查向量資料庫狀態（chunk 數量、向量維度）
   python backend/scripts/run.py export     # 匯出摘要至 db/exported_data.sql
   python backend/scripts/run.py search [query] [--school cmu|caltech]
-  python backend/scripts/run.py rag [query] [--mq] [--school cmu|caltech]
+  python backend/scripts/run.py rag [query] [--school cmu|caltech]
   python backend/scripts/run.py agent [query] [--max-steps N]   # Agentic RAG (ReAct Loop)
   python backend/scripts/run.py init-all   # 一次完成 setup + import
 """
@@ -36,7 +36,7 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from db.ops import export_sql, import_json, setup_db, verify
+from db.operations import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search
@@ -71,7 +71,6 @@ def main():
     if cmd in ["search", "rag", "agent"]:
         # 解析旗標
         evaluate  = False
-        use_mq    = "--mq" in sys.argv or "--multi-query" in sys.argv
         max_steps = 5
         school_id = None
         if "--max-steps" in sys.argv:
@@ -87,7 +86,7 @@ def main():
                 school_id = sys.argv[idx + 1]
 
         # 取出 query（排除旗標）
-        skip_keywords = {"--mq", "--multi-query", "--school", "--max-steps"}
+        skip_keywords = {"--school", "--max-steps"}
         args_clean = [
             a for i, a in enumerate(sys.argv[2:])
             if a not in skip_keywords and (i == 0 or sys.argv[i + 1] != "--school")
@@ -107,7 +106,6 @@ def main():
         else:
             ok = run_rag_pipeline(
                 query,
-                use_multi_query=use_mq,
                 school_id=school_id,
             )
     else:

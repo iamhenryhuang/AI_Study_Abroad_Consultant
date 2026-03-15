@@ -72,10 +72,9 @@ def search_core(
 
     try:
         with conn.cursor() as cur:
-            # 3. 組裝 WHERE 條件（可選的 school_id / page_type 過濾）
+            # 3. 組裝 WHERE 條件
             filters = []
             params = []
-
             if school_id:
                 filters.append("dc.school_id = %s")
                 params.append(school_id)
@@ -84,28 +83,58 @@ def search_core(
                 params.append(page_type)
 
             where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
+            and_where_clause = ("AND " + " AND ".join(filters)) if filters else ""
 
-            # 初篩數量：rerank 時多撈一些候選
-            initial_k = top_k * 3 if use_rerank else top_k
+            # 初篩數量
+            initial_k = top_k * 4 if use_rerank else top_k * 2
 
+            # Hybrid Search SQL (RRF - Reciprocal Rank Fusion)
             sql = f"""
+                WITH vector_matches AS (
+                    SELECT 
+                        id, 
+                        1 - (embedding <=> %s::vector) AS vector_score,
+                        ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) as rank
+                    FROM document_chunks dc
+                    {where_clause}
+                    LIMIT {initial_k}
+                ),
+                keyword_matches AS (
+                    SELECT 
+                        id, 
+                        ts_rank_cd(fts_vector, websearch_to_tsquery('english', %s)) AS fts_score,
+                        ROW_NUMBER() OVER (ORDER BY ts_rank_cd(fts_vector, websearch_to_tsquery('english', %s)) DESC) as rank
+                    FROM document_chunks dc
+                    WHERE fts_vector @@ websearch_to_tsquery('english', %s)
+                    {and_where_clause}
+                    LIMIT {initial_k}
+                )
                 SELECT
                     dc.chunk_text,
                     dc.source_url,
                     dc.page_type,
                     dc.school_id,
                     dc.metadata,
-                    u.name          AS university_name,
-                    1 - (dc.embedding <=> %s::vector) AS vector_score
+                    u.name AS university_name,
+                    COALESCE(vm.vector_score, 0) AS vector_score,
+                    COALESCE(km.fts_score, 0) AS fts_score,
+                    (COALESCE(1.0 / (60 + vm.rank), 0) + COALESCE(1.0 / (60 + km.rank), 0)) AS rrf_score
                 FROM document_chunks dc
                 JOIN universities u ON dc.university_id = u.id
-                {where_clause}
-                ORDER BY dc.embedding <=> %s::vector
-                LIMIT %s;
+                LEFT JOIN vector_matches vm ON dc.id = vm.id
+                LEFT JOIN keyword_matches km ON dc.id = km.id
+                WHERE vm.id IS NOT NULL OR km.id IS NOT NULL
+                ORDER BY rrf_score DESC
+                LIMIT {initial_k};
             """
 
-            # query_vector 出現兩次（計算分數 + 排序）
-            cur.execute(sql, [query_vector] + params + [query_vector, initial_k])
+            # 參數列表: 
+            # 1-2. query_vector (for vector_matches score & rank)
+            # 3.   params (for vector_matches filter)
+            # 4-6. query (for keyword_matches score, rank, and WHERE)
+            # 7.   params (for keyword_matches filter)
+            full_params = [query_vector, query_vector] + params + [query, query, query] + params
+            cur.execute(sql, full_params)
 
             colnames = [desc[0] for desc in cur.description]
             rows = cur.fetchall()

@@ -1,54 +1,84 @@
 """
-chunker.py — 智慧分段模組（v3）
+chunker.py — 智慧分段模組（v4）
 
-根據頁面類型動態選擇 chunk size，並對 FAQ 頁面做預處理，
-以防止問答對話被橫向截斷。
-
-頁面類型對應策略：
-  - faq / frequently-asked  → 先用 regex 拆出每個 Q&A pair，各自作為一個 chunk
-                               若單個 Q&A 超過 2000 字元才再切分
-  - checklist / requirements → chunk_size=1200（條列式英文，需保留完整條目）
-  - admissions / apply      → chunk_size=1600（申請說明段落）
-   - 其他 / 預設             → chunk_size=1400
-
-overlap 固定為 chunk_size * 0.2（20%），最少 150 字元，
-以確保英文長句在邊界處有足夠的上下文重疊。
+改進策略：
+1. 雜訊清洗：移除網頁常見的 Cookie 聲明、導覽碎片等。
+2. 上下文注入：為每個 chunk 加上 [學校 | 類型] 前綴，提升向量檢索精度。
+3. FAQ 強化：更精確的問答對切分與合併邏輯。
+4. 分層切分：優化 RecursiveCharacterTextSplitter 的分隔符號順序。
 """
 
 from __future__ import annotations
 
 import re
+from typing import List
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# ── 頁面類型對應的 chunk_size（字元數）──────────────────────────────
-# 原始資料為英文，平均每個單字約 5–6 字元 + 空格
-# chunk_size=1400 ≈ 200–250 個英文單字（約 2–3 個段落）
 _PAGE_TYPE_SIZES: dict[str, int] = {
-    "faq":               2000,   # FAQ 個別問答若超過此長度才二次切分
-    "checklist":         1200,   # 條列式資訊，保留完整條目
-    "requirements":      1200,
-    "admissions":        1600,   # 申請說明段落
-    "apply":             1600,
+    "faq":               1800,   # FAQ 通常較長，但需控制在 Token 限制內
+    "checklist":         1000,   # 條列式，較小 chunk 以免混雜無關項目
+    "requirements":      1000,
+    "admissions":        1500,
+    "apply":             1500,
     "accepting":         1400,
-    "professor_profile": 1800,   # 教授 Google Scholar profile（保留完整個人資訊）
-    "professor_paper":   1000,   # 單篇論文資訊（通常較短，不需太大）
+    "professor_profile": 1800,   # 保留完整個人資訊
+    "professor_paper":   800,    # 短 chunk 適合單篇論文
     "general":           1400,
 }
 
 _DEFAULT_CHUNK_SIZE = 1400
-_MIN_OVERLAP = 150          # 英文最少 overlap 字元數
-_SEPARATORS = ["\n\n", "\n", ". ", "。", " ", ""]
+_MIN_OVERLAP = 150
+_SEPARATORS = [
+    "\n\n", 
+    "\n", 
+    "---", 
+    "***", 
+    ". ", 
+    "! ", 
+    "? ", 
+    "; ", 
+    "。 ", 
+    "！ ", 
+    "？ ", 
+    "； ", 
+    "\t",
+    " ", 
+    ""
+]
+
+# ── 雜訊清洗 ────────────────────────────────────────────────────
+
+_NOISE_RE = [
+    # 移除 UIUC / Stanford 等常見 Web Cookie Notice
+    (r"X\s+We use Cookies on this site.*?About Cookies", ""),
+    (r"University of Illinois System Cookie Policy.*?Close", ""),
+    (r"Stanford University \(link is external\)", ""),
+    (r"Search this site|Submit Search|Back to Top", ""),
+    (r"Jump to navigation|Skip to main content", ""),
+    (r"Link opens in a new window", ""),
+    (r"\(link is external\)", ""),
+    # 移除連續多個換行與空白
+    (r"\n{3,}", "\n\n"),
+    (r" {2,}", " "),
+]
+
+def clean_text(text: str) -> str:
+    """去除常見的網頁雜訊（Cookie 聲明、導覽列碎片等）。"""
+    cleaned = text
+    for pattern, repl in _NOISE_RE:
+        cleaned = re.sub(pattern, repl, cleaned, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
 
 
 # ── FAQ 專用預處理 ──────────────────────────────────────────────────
 
-# 匹配 "Do you...?" / "What is...?" / "If I...?" / "Can I...?" 等常見問句開頭
+# 匹配常見問句開頭或問答標籤 (Q:, Question:)
 _FAQ_SPLIT_RE = re.compile(
-    r"(?<=[.?!])\s*(?="          # 在句號/問號/驚嘆號後
-    r"(?:Do|Does|Is|Are|Can|Will|Should|How|What|Where|When|Why|Who|"
+    r"(?:(?<=[.?!])\s*|(?<=\n))\s*(?="          # 在句號後或換行後
+    r"(?:Q:|Question:|Do|Does|Is|Are|Can|Will|Should|How|What|Where|When|Why|Who|"
     r"Which|If|Am|Was|Were|Has|Have|Had|Would|Could|May|Must|Shall)\s)",
-    re.MULTILINE,
+    re.MULTILINE | re.IGNORECASE,
 )
 
 
@@ -134,31 +164,53 @@ def _make_splitter(page_type: str, secondary: bool = False) -> RecursiveCharacte
     )
 
 
-def chunk_text(text: str, page_type: str = "general") -> list[str]:
+def chunk_text(
+    text: str, 
+    page_type: str = "general",
+    url: str = "",
+    school_name: str = ""
+) -> list[str]:
     """
-    將長文字依 page_type 切成多個 chunk，回傳 list[str]。
+    將長文字依 page_type 切成多個 chunk，並注入背景資訊。
 
     Args:
-        text:      原始純文字（爬取自網頁或檔案）
-        page_type: 頁面類型，影響 chunk 策略與大小
+        text:        原始純文字
+        page_type:   頁面類型
+        url:         來源 URL（用於 context 注入，選填）
+        school_name: 學校名稱（用於 context 注入，選填）
 
     Returns:
-        切分後的字串列表，過濾掉空白或過短的 chunk（< 60 字元）。
-
-    特殊處理：
-        - page_type == 'faq'：先用 regex 拆出 Q&A pairs，再切分
-        - 其他：直接用 RecursiveCharacterTextSplitter
+        切分後的字串列表，過濾掉過短的內容。
     """
     if not text or not text.strip():
         return []
 
-    text = text.strip()
+    # 1. 雜訊清洗
+    text = clean_text(text)
+    if len(text) < 60:
+        return []
 
+    # 2. 執行切分
     if page_type == "faq":
         chunks = _split_faq_pairs(text)
     else:
         splitter = _make_splitter(page_type)
         chunks = splitter.split_text(text)
 
-    # 過濾過短 chunk（英文 60 字元 ≈ 8–12 個單字，已是最短有意義句子）
-    return [c for c in chunks if len(c.strip()) >= 60]
+    # 3. 注入上下文前綴 & 過濾
+    final_chunks = []
+    prefix = ""
+    if school_name or page_type != "general":
+        label = f"{school_name} | {page_type.replace('_', ' ').title()}".strip(" |")
+        prefix = f"[{label}]\n"
+
+    for c in chunks:
+        c = c.strip()
+        if len(c) < 60:
+            continue
+        
+        # 避免重複添加前綴
+        chunk_content = c if c.startswith("[") else f"{prefix}{c}"
+        final_chunks.append(chunk_content)
+
+    return final_chunks
