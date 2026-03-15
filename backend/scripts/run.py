@@ -36,7 +36,7 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from db.ops import export_sql, import_json, setup_db, verify
+from db.operations import export_sql, import_json, setup_db, verify
 from embedder.pipeline import run_pipeline
 from embedder.verifier import verify_embeddings
 from retriever.search import run_search

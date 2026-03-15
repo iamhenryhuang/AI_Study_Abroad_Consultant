@@ -11,7 +11,7 @@ scripts/
 ├── run.py                  ← unified entry point for all commands
 ├── db/
 │   ├── connection.py       ← PostgreSQL connection (reads DATABASE_URL from .env)
-│   └── ops.py              ← setup_db, import_json, verify, export_sql
+│   └── operations.py       ← setup_db, import_json, verify, export_sql
 ├── embedder/
 │   ├── pipeline.py         ← main pipeline: reads {url:text} JSON → chunks → embeds → stores
 │   ├── chunker.py          ← smart chunking: chunk size + strategy adapts to page_type
