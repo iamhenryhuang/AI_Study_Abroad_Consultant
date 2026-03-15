@@ -1,102 +1,91 @@
-# Study Abroad RAG: North America CS Master's Consultant
+# Study Abroad RAG: North America CS Consultant
 
-A RAG-based tool built to simplify the search for North American CS master's programs. It scrapes official university pages, indexes them in a vector database, and uses an LLM agent to provide context-aware answers about admission requirements and application strategies.
+> **Smart, Agent-based RAG system for North American CS Master's Admissions.**
 
----
-
-## Operations & CLI Commands
-
-All Python commands should be run from the **project root**.
-
-### 1. Database (SQL) Operations
-Manage the PostgreSQL schema and traditional data:
-- **`python backend/scripts/run.py setup`**: Check connection and create the `study_abroad` database if it doesn't exist.
-- **`python backend/scripts/run.py verify-db`**: Verify that the universities and web pages have been correctly imported into SQL.
-- **`python backend/scripts/run.py export`**: Export a data summary to `db/exported_data.sql`.
-
-### 2. Embedding & Vector Pipeline
-Prepare and index data for semantic search:
-- **`python backend/scripts/run.py import`**: Build schema + Chunk text + Embed + Store everything in Postgres.
-- **`python backend/scripts/run.py embed`**: Specifically runs the chunking and embedding pipeline for existing records.
-- **`python backend/scripts/run.py verify-vdb`**: Check the vector store status (chunk counts, vector dimensions, and HNSW index).
-
-### 3. RAG & Search Operations
-Test the retrieval and generation logic in the terminal:
-- **Vector Search (No LLM)**:
-  - `python backend/scripts/run.py search "MSCS admission requirements"`
-  - `python backend/scripts/run.py search "funding" --school caltech`
-- **Standard RAG (Retrieval + LLM)**:
-  - `python backend/scripts/run.py rag "What are the requirements for CMU?"`
-  - `python backend/scripts/run.py rag "Compare admission requirements across schools"`
-  - `python backend/scripts/run.py rag "GPA reqs" --school ucla` (Filters by specific school)
-
-### 4. Agentic RAG (Advanced Reasoning)
-Uses a ReAct loop to solve complex queries that require multiple steps:
-- **`python backend/scripts/run.py agent "Compare Stanford and MIT deadlines"`**
-- **`python backend/scripts/run.py agent "Which school has best AI faculty?" --max-steps 10`**
-
-### 5. Professor Profiling
-Fetch research data and embed it directly:
-- **`python -m backend.scripts.professor_fetcher.run_fetch --name "Andrew Ng" --school "Stanford" --embed`**
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC.svg)](https://tailwindcss.com/)
 
 ---
 
-## Running the Application
+## Overview
 
-### One-Time Initialization
-If this is your first time setting up, run this to handle both DB setup and data import:
+Study Abroad RAG is an intelligent advisory tool designed to simplify the complex process of researching North American CS Master's programs. Instead of manually scouring hundreds of university pages, users can ask our **Agentic RAG** system specific questions about admission requirements, funding, faculty, and deadlines.
+
+The system doesn't just "search" — it **reasons**, **compares**, and **cites** its sources accurately.
+
+### Key Features
+- **Agentic Reasoning**: Uses a ReAct loop to solve multi-faceted queries (e.g., "Compare the GRE requirements of Stanford vs. CMU").
+- **Real-Time Thinking**: Watch the AI work as it plans its search, executes steps, and synthesizes the answer.
+- **High Precision**: Powered by **BGE-M3** embeddings and a **Cross-Encoder Reranker** for the best document retrieval.
+- **Contextual Chunking**: Proprietary chunking strategy that preserves metadata and FAQ structures.
+- **Verified Sources**: Every claim includes a direct source URL to the university's official page.
+
+---
+
+## Architecture
+
+```text
+.
+├── backend/                # FastAPI, Vector DB logic, Gemini Agent
+│   ├── api.py              # API server with SSE support
+│   ├── scripts/            # Core RAG & Ingestion logic
+│   └── data/               # University JSON dumps (Scraped data)
+├── frontend/               # React + Tailwind v4 + Vite
+│   ├── src/components/     # Modern UI components
+│   └── src/hooks/          # Real-time streaming hooks
+└── db/                     # SQL schema & PostgreSQL migrations
+```
+
+---
+
+## Quick Start
+
+### 1. Prerequesites
+- **Python 3.10+**
+- **Node.js 18+**
+- **PostgreSQL** with the [pgvector](https://github.com/pgvector/pgvector) extension.
+
+### 2. Initialization (The Easy Way)
+From the **root directory**, run the one-command setup:
 ```bash
+# Setup DB and import all data (approx. 2-5 mins)
 python backend/scripts/run.py init-all
 ```
 
-### Starting the Services
-You need two terminals running simultaneously.
+### 3. Start Services
+Open two terminals:
 
-#### **Backend (FastAPI)**
+**Terminal A: Backend**
 ```bash
-# Install dependencies first
 pip install -r backend/requirements.txt
-
-# Start the uvicorn server
 uvicorn backend.api:app --reload --port 8000
 ```
-- API Docs: `http://localhost:8000/docs`
-- Health Check: `http://localhost:8000/api/health`
 
-#### **Frontend (React)**
+**Terminal B: Frontend**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-- Local URL: `http://localhost:5173`
 
 ---
 
-## Project Structure
+## CLI Power Tools
 
-```text
-├── backend/                # FastAPI application
-│   ├── api.py              # API entry point & SSE logic
-│   ├── data/               # University JSON dumps
-│   ├── scripts/            # Core logic
-│   │   ├── db/             # SQL operations
-│   │   ├── embedder/       # Chunking & Embedding
-│   │   ├── retriever/      # Search, RAG, and Agent logic
-│   │   └── run.py          # Unified CLI Entry point
-│   └── requirements.txt    # Python dependencies
-├── db/                     # Database schema & init scripts
-└── frontend/               # React application (Vite + TS)
-```
+Manage the entire pipeline directly from your terminal using `backend/scripts/run.py`:
+
+- **`search "QUERY"`**: Pure vector search results.
+- **`rag "QUERY"`**: Standard Retrieval-Augmented Generation.
+- **`agent "QUERY"`**: The advanced Agentic RAG ReAct loop.
+- **`verify-vdb`**: Check the pulse of your vector database.
 
 ---
 
-## Technical Highlights
-
-- **Gemini 2.5 Flash**: Backend LLM for high-speed reasoning.
-- **BGE-M3 & Reranker**: State-of-the-art embedding and cross-encoder models.
-- **pgvector + HNSW**: Efficient vector storage and retrieval within PostgreSQL.
-- **FastAPI SSE**: Real-time streaming of the Agent's "thinking" process to the UI.
-- **Dynamic Chunking**: Context-aware text splitting (FAQ, Admissions, Checklists).
+## Documentation
+For detailed information on specific modules, please refer to:
+- [Backend Documentation](backend/README.md)
+- [Frontend Documentation](frontend/README.md)
 
 ---

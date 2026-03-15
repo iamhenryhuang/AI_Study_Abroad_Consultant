@@ -5,6 +5,7 @@
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- 先清除舊表
 DROP TABLE IF EXISTS document_chunks CASCADE;
@@ -12,26 +13,28 @@ DROP TABLE IF EXISTS web_pages CASCADE;
 DROP TABLE IF EXISTS universities CASCADE;
 
 -- ============================================================
--- 1. universities — 學校主表（從 URL domain 推斷）
+-- 1. universities
 -- ============================================================
 CREATE TABLE universities (
     id          SERIAL PRIMARY KEY,
-    school_id   VARCHAR(100) UNIQUE NOT NULL,   -- e.g. 'cmu', 'caltech'
-    name        VARCHAR(255) NOT NULL,           -- e.g. 'Carnegie Mellon University'
-    domain      VARCHAR(255),                    -- e.g. 'cmu.edu'
+    school_id   VARCHAR(100) UNIQUE NOT NULL,
+    name        VARCHAR(255) NOT NULL,
+    domain      VARCHAR(255),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX idx_uni_name_trgm ON universities USING gin (name gin_trgm_ops);
+
 -- ============================================================
--- 2. web_pages — 每個爬取的 URL 一筆（帶原始文字）
+-- 2. web_pages
 -- ============================================================
 CREATE TABLE web_pages (
     id            SERIAL PRIMARY KEY,
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
-    url           TEXT UNIQUE NOT NULL,          -- 原始 URL
-    page_type     VARCHAR(100),                  -- 推斷的頁面類型 e.g. 'admissions', 'faq', 'checklist', 'general'
-    raw_text      TEXT NOT NULL,                 -- 爬到的純文字
-    char_count    INTEGER,                       -- 文字長度（方便 debug）
+    url           TEXT UNIQUE NOT NULL,
+    page_type     VARCHAR(100),
+    raw_text      TEXT NOT NULL,
+    char_count    INTEGER,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -39,32 +42,41 @@ CREATE INDEX idx_web_pages_university ON web_pages(university_id);
 CREATE INDEX idx_web_pages_page_type  ON web_pages(page_type);
 
 -- ============================================================
--- 3. document_chunks — 向量檢索主表（每個 chunk 一筆）
+-- 3. document_chunks (優化版)
 -- ============================================================
 CREATE TABLE document_chunks (
     id            SERIAL PRIMARY KEY,
     university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
     page_id       INTEGER REFERENCES web_pages(id) ON DELETE CASCADE,
-    school_id     VARCHAR(100) NOT NULL,         -- 冗餘，加速過濾
-    source_url    TEXT NOT NULL,                 -- 直接記錄原始 URL，方便回答時引用
-    page_type     VARCHAR(100),                  -- 頁面類型，供 metadata filter 用
-    chunk_index   INTEGER NOT NULL,              -- 同一 page_id 內的序號
+    school_id     VARCHAR(100) NOT NULL,
+    source_url    TEXT NOT NULL,
+    page_type     VARCHAR(100),
+    chunk_index   INTEGER NOT NULL,
     chunk_text    TEXT NOT NULL,
-    embedding     vector(1024),                  -- BAAI/bge-m3 向量維度
-    metadata      JSONB,                         -- 彈性擴充欄位（page_type, url, school_id 等）
+    embedding     vector(1024),
+    metadata      JSONB,
+    fts_vector    tsvector, -- 全文檢索向量
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (page_id, chunk_index)
 );
 
--- GIN index：加速 metadata JSONB 欄位查詢
-CREATE INDEX idx_chunks_metadata
-    ON document_chunks USING GIN (metadata);
-
--- HNSW index：加速向量相似度搜尋 (ANN)
+-- HNSW index: 提升 m 與 ef_construction 以優化召回率
 CREATE INDEX idx_chunks_embedding
     ON document_chunks USING hnsw (embedding vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
+    WITH (m = 24, ef_construction = 128);
 
--- 加速 school_id/page_type 條件過濾
+-- FTS index: 加速關鍵字搜尋
+CREATE INDEX idx_chunks_fts ON document_chunks USING GIN (fts_vector);
+
+-- GIN index: 加速 metadata JSONB
+CREATE INDEX idx_chunks_metadata ON document_chunks USING GIN (metadata);
+
+-- 基礎過濾索引
 CREATE INDEX idx_chunks_school   ON document_chunks(school_id);
 CREATE INDEX idx_chunks_pagetype ON document_chunks(page_type);
+CREATE INDEX idx_chunks_pageid   ON document_chunks(page_id);
+
+-- 自動更新 fts_vector 的觸發器
+CREATE TRIGGER tsvectorupdate BEFORE INSERT OR UPDATE
+ON document_chunks FOR EACH ROW EXECUTE FUNCTION
+tsvector_update_trigger(fts_vector, 'pg_catalog.english', chunk_text);

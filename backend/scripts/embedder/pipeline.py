@@ -322,7 +322,7 @@ def run_pipeline(data_dirname: str = "data") -> bool:
                 total_pages += 1
 
                 # 切片
-                chunks = chunk_text(raw_text, page_type=page_type)
+                chunks = chunk_text(raw_text, page_type=page_type, url=url, school_name=name)
                 if not chunks:
                     print(f"切片結果為空：{url[:80]}")
                     skipped += 1
